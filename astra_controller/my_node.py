@@ -128,6 +128,116 @@ class ArmController:
         self.quit.set()
         self.ser.close()
 
+class LiftController:
+    COMM_LEN = 2 + 16
+    COMM_HEAD = 0x5A
+    COMM_TYPE_PING = 0x00
+    COMM_TYPE_PONG = 0x01
+    COMM_TYPE_CTRL = 0x02
+    COMM_TYPE_FEEDBACK = 0x03
+
+    STEPPER_PULSE_PER_REV = 800 # 800pulse/rev
+    RAIL_MM_PER_REV = 10 # 10mm/rev
+    RAIL_MAX_LENGTH_MM = 500 # 1000mm length rail // 500mm on desk length
+    STEPPER_MAX_PULSE = (RAIL_MAX_LENGTH_MM / RAIL_MM_PER_REV * STEPPER_PULSE_PER_REV) # 80000
+
+    @staticmethod
+    def to_si_unit(x):
+        return x / LiftController.STEPPER_PULSE_PER_REV * LiftController.RAIL_MM_PER_REV / 1000
+        
+    @staticmethod
+    def to_raw_unit(x):
+        return int(x * 1000 / LiftController.RAIL_MM_PER_REV * LiftController.STEPPER_PULSE_PER_REV)
+
+    def __init__(self, name, state_cb=None, pong_cb=None):
+        logger.info(name)
+
+        self.state_cb = state_cb
+        self.pong_cb = pong_cb
+
+        self.ser = serial.Serial(name, 921600, timeout=None)
+        # self.ser.rts = False
+
+        self.lock = threading.Lock()
+        self.last_time = None
+        
+        self.last_position = None
+        self.last_velocity = None
+        self.last_effort = None
+        self.last_time = None
+
+        self.write_lock = threading.Lock()
+
+        self.quit = threading.Event()
+
+        self.t = threading.Thread(target=self.recv_thread)
+        self.t.daemon = True
+        self.t.start()
+
+        while self.last_position is None: # wait for init done
+            time.sleep(0.1)
+
+    def recv_thread(self):
+        try:
+            while not self.quit.is_set():
+                data = self.ser.read(1)
+                if not (data[0] == self.COMM_HEAD): # 逐步同步
+                    sys.stdout.buffer.write(data)
+                    sys.stdout.flush()
+                    continue
+                
+                data += self.ser.read(self.COMM_LEN - 1)
+                assert(len(data) == self.COMM_LEN)
+
+                if data[1] == self.COMM_TYPE_PONG:
+                    if self.state_cb is not None:
+                        self.pong_cb(struct.unpack('>xxIxxxxxxxxxxxx', data))
+                elif data[1] == self.COMM_TYPE_FEEDBACK:
+                    position = self.to_si_unit(np.array(struct.unpack('>xxIxxxxxxxxxxxx', data)))
+                    this_time = time.time()
+                    with self.lock:
+                        if self.last_time is None:
+                            self.last_position = 0
+                            self.last_velocity = 0
+                            self.last_effort = 0
+                            self.last_time = this_time - 1 # in case of dividing 0
+                        delta_time = this_time - self.last_time
+                        velocity = (position - self.last_position) / delta_time 
+                        effort = (velocity - self.last_velocity) / delta_time # without bias (gravity) and mass
+                        self.last_position = position
+                        self.last_velocity = velocity
+                        self.last_effort = effort
+                        self.last_time = this_time
+                        if self.state_cb is not None:
+                            self.state_cb(self.last_position, self.last_velocity, self.last_effort, self.last_time)
+                else:
+                    sys.stdout.buffer.write(data)
+                    sys.stdout.flush()
+        # except Exception:
+        #     pass
+        finally:
+            print("thread exiting")
+
+    def get_pos(self): # 一帧可能会被用多次，但是绝对不会卡住
+        with self.lock:
+            return self.last_position, self.last_velocity, self.last_effort, self.last_time
+
+    def write(self, encoded_data):
+        with self.write_lock:
+            # print(encoded_data)
+            self.ser.write(encoded_data)
+
+    def set_pos(self, pos):
+        pos_protected = np.minimum(np.maximum(pos, 0), (self.RAIL_MAX_LENGTH_MM / 1000))
+        if np.isclose(pos, pos_protected, atol=0.01):
+            self.write(struct.pack('>BBIxxxxxxxxxxxx', self.COMM_HEAD, self.COMM_TYPE_CTRL, self.to_raw_unit(pos)))
+        else:
+            logger.error(f"Arm reach min/max!!! {pos} {pos_protected}")
+        
+    def __del__(self):
+        self.quit.set()
+        self.ser.close()
+
 def main(args=None):
     rclpy.init(args=args)
 
@@ -136,11 +246,13 @@ def main(args=None):
     global logger
     logger = node.get_logger()
     
-    node.declare_parameter('device', '/dev/ttyUSB0')
+    # node.declare_parameter('device', '/dev/tty_puppet_right')
 
-    device = node.get_parameter('device').value
+    # device = node.get_parameter('device').value
 
-    right_controller = ArmController(device)
+    right_controller = ArmController("/dev/tty_puppet_right")
+    
+    right_lift_controller = LiftController("/dev/tty_puppet_lift_right")
 
     joint_state_publisher = node.create_publisher(sensor_msgs.msg.JointState, "/joint_states", 10)
 
@@ -155,65 +267,65 @@ def main(args=None):
         "joint_r7r": 0
     }
     
-    # def publish_joint_states():
-    #     while True:
-    #         msg = sensor_msgs.msg.JointState()
-    #         msg.header.stamp = node.get_clock().now().to_msg()
+    def publish_joint_states():
+        while True:
+            msg = sensor_msgs.msg.JointState()
+            msg.header.stamp = node.get_clock().now().to_msg()
             
-    #         msg.name = [
-    #             "joint_r1", 
-    #             "joint_r2", 
-    #             "joint_r3", 
-    #             "joint_r4", 
-    #             "joint_r5", 
-    #             "joint_r6", 
-    #             "joint_r7l", 
-    #             "joint_r7r" 
-    #         ]
-    #         msg.position = [ 
-    #             float(joint_pos["joint_r1"]), 
-    #             float(joint_pos["joint_r2"]), 
-    #             float(joint_pos["joint_r3"]), 
-    #             float(joint_pos["joint_r4"]), 
-    #             float(joint_pos["joint_r5"]), 
-    #             float(joint_pos["joint_r6"]), 
-    #             float(joint_pos["joint_r7l"]), 
-    #             float(joint_pos["joint_r7r"]) 
-    #         ]
+            msg.name = [
+                "joint_r1", 
+                "joint_r2", 
+                "joint_r3", 
+                "joint_r4", 
+                "joint_r5", 
+                "joint_r6", 
+                "joint_r7l", 
+                "joint_r7r" 
+            ]
+            msg.position = [ 
+                float(right_lift_controller.last_position), 
+                float(right_controller.last_position[0]), 
+                float(right_controller.last_position[1]), 
+                float(right_controller.last_position[2]), 
+                float(right_controller.last_position[3]), 
+                float(right_controller.last_position[4]), 
+                -float(right_controller.last_position[5]), 
+                float(right_controller.last_position[5])
+            ]
 
-    #         joint_state_publisher.publish(msg)
-    #         time.sleep(0.1)
-    # t = threading.Thread(target=publish_joint_states)
-    # t.daemon = True
-    # t.start()
+            joint_state_publisher.publish(msg)
+            time.sleep(0.1)
+    t = threading.Thread(target=publish_joint_states)
+    t.daemon = True
+    t.start()
 
-    def state_cb(position, velocity, effort, this_time):
-        msg = sensor_msgs.msg.JointState()
-        msg.header.stamp = node.get_clock().now().to_msg()
+    # def state_cb(position, velocity, effort, this_time):
+    #     msg = sensor_msgs.msg.JointState()
+    #     msg.header.stamp = node.get_clock().now().to_msg()
         
-        msg.name = [
-            "joint_r1", 
-            "joint_r2", 
-            "joint_r3", 
-            "joint_r4", 
-            "joint_r5", 
-            "joint_r6", 
-            "joint_r7l", 
-            "joint_r7r" 
-        ]
-        msg.position = [ 
-            float(0.1), 
-            float(position[0]), 
-            float(position[1]), 
-            float(position[2]), 
-            float(position[3]), 
-            float(position[4]), 
-            -float(position[5]), 
-            float(position[5]), 
-        ]
+    #     msg.name = [
+    #         "joint_r1", 
+    #         "joint_r2", 
+    #         "joint_r3", 
+    #         "joint_r4", 
+    #         "joint_r5", 
+    #         "joint_r6", 
+    #         "joint_r7l", 
+    #         "joint_r7r" 
+    #     ]
+    #     msg.position = [ 
+    #         float(0.1), 
+    #         float(position[0]), 
+    #         float(position[1]), 
+    #         float(position[2]), 
+    #         float(position[3]), 
+    #         float(position[4]), 
+    #         -float(position[5]), 
+    #         float(position[5]), 
+    #     ]
 
-        joint_state_publisher.publish(msg)
-    right_controller.state_cb = state_cb
+    #     joint_state_publisher.publish(msg)
+    # right_controller.state_cb = state_cb
 
     def execute_callback(goal_handle: rclpy.action.server.ServerGoalHandle):
         # https://docs.ros.org/en/foxy/Tutorials/Intermediate/Writing-an-Action-Server-Client/Py.html
@@ -245,6 +357,7 @@ def main(args=None):
     def do_pose():
         while True:
             right_controller.set_pos([joint_pos["joint_r2"], joint_pos["joint_r3"], joint_pos["joint_r4"], joint_pos["joint_r5"], joint_pos["joint_r6"], joint_pos["joint_r7r"]])
+            right_lift_controller.set_pos(joint_pos["joint_r1"])
             time.sleep(0.01)
     t = threading.Thread(target=do_pose)
     t.daemon = True
