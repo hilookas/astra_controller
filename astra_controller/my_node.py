@@ -12,6 +12,7 @@ import struct
 import math
 import time
 import sys
+import astra_controller_interfaces.srv
 
 class ArmController:
     COMM_LEN = 2 + 16
@@ -248,6 +249,115 @@ def main(args=None):
     t = threading.Thread(target=do_pose)
     t.daemon = True
     t.start()
+
+    def cb(
+        request: astra_controller_interfaces.srv.ReadConfig.Request, 
+        response: astra_controller_interfaces.srv.ReadConfig.Response
+    ):
+        logger.info(f'read_config: {request.addr}')
+
+        e = threading.Event()
+        d = None
+        def config_cb(data):
+            nonlocal d
+            d = struct.unpack('>xxIixxxxxxxx', data)
+            e.set()
+            
+        with right_controller.config_cb_lock:
+            right_controller.config_cb = config_cb
+            right_controller.write(struct.pack('>BBIxxxxxxxxxxxx', right_controller.COMM_HEAD, right_controller.COMM_TYPE_CONFIG_READ, request.addr))
+            # or use future https://stackoverflow.com/questions/43550756/setting-asyncio-futures-value-in-a-callback-from-different-thread
+
+            e.wait() # TODO 可能会出现先set后wait的情况(如果时序不对的话)
+
+            right_controller.config_cb = None
+
+        assert(request.addr == d[0])
+        response.data = d[1]
+        
+        return response
+    node.create_service(astra_controller_interfaces.srv.ReadConfig, f'/read_config', cb)
+
+    def cb(
+        request: astra_controller_interfaces.srv.WriteConfig.Request, 
+        response: astra_controller_interfaces.srv.WriteConfig.Response
+    ):
+        logger.info(f'write_config: {request.addr} {request.data}')
+
+        e = threading.Event()
+        d = None
+        def config_cb(data):
+            nonlocal d
+            d = struct.unpack('>xxIixxxxxxxx', data)
+            e.set()
+            
+        with right_controller.config_cb_lock:
+            right_controller.config_cb = config_cb
+            right_controller.write(struct.pack('>BBIixxxxxxxx', right_controller.COMM_HEAD, right_controller.COMM_TYPE_CONFIG_WRITE, request.addr, request.data))
+
+            e.wait()
+
+            right_controller.config_cb = None
+
+        assert(request.addr == d[0])
+        response.data = d[1]
+        
+        return response
+    node.create_service(astra_controller_interfaces.srv.WriteConfig, f'/write_config', cb)
+
+    def cb(
+        request: astra_controller_interfaces.srv.ReadConfigFloat.Request, 
+        response: astra_controller_interfaces.srv.ReadConfigFloat.Response
+    ):
+        logger.info(f'read_config_float: {request.addr}')
+
+        e = threading.Event()
+        d = None
+        def config_cb(data):
+            nonlocal d
+            d = struct.unpack('>xxIfxxxxxxxx', data)
+            e.set()
+            
+        with right_controller.config_cb_lock:
+            right_controller.config_cb = config_cb
+            right_controller.write(struct.pack('>BBIxxxxxxxxxxxx', right_controller.COMM_HEAD, right_controller.COMM_TYPE_CONFIG_READ, request.addr))
+
+            e.wait() # TODO 可能会出现先set后wait的情况(如果时序不对的话)
+
+            right_controller.config_cb = None
+
+        assert(request.addr == d[0])
+        response.data = d[1]
+        
+        return response
+    node.create_service(astra_controller_interfaces.srv.ReadConfigFloat, f'/read_config_float', cb)
+
+    def cb(
+        request: astra_controller_interfaces.srv.WriteConfigFloat.Request, 
+        response: astra_controller_interfaces.srv.WriteConfigFloat.Response
+    ):
+        logger.info(f'write_config_float: {request.addr} {request.data}')
+
+        e = threading.Event()
+        d = None
+        def config_cb(data):
+            nonlocal d
+            d = struct.unpack('>xxIfxxxxxxxx', data)
+            e.set()
+            
+        with right_controller.config_cb_lock:
+            right_controller.config_cb = config_cb
+            right_controller.write(struct.pack('>BBIfxxxxxxxx', right_controller.COMM_HEAD, right_controller.COMM_TYPE_CONFIG_WRITE, request.addr, request.data))
+
+            e.wait()
+
+            right_controller.config_cb = None
+
+        assert(request.addr == d[0])
+        response.data = d[1]
+        
+        return response
+    node.create_service(astra_controller_interfaces.srv.WriteConfigFloat, f'/write_config_float', cb)
 
     rclpy.spin(node)
 
