@@ -75,6 +75,8 @@ def generate_launch_description():
         )
     )
 
+    # ros2 control add lots of unnecessary complexity...
+
     # Fake joint driver
     # ld.add_action(
     #     Node(
