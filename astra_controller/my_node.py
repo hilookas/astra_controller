@@ -14,6 +14,7 @@ import time
 import sys
 
 class ArmController:
+    COMM_LEN = 2 + 16
     COMM_HEAD = 0x5A
     COMM_TYPE_PING = 0x00
     COMM_TYPE_PONG = 0x01
@@ -26,13 +27,15 @@ class ArmController:
 
     @staticmethod
     def to_si_unit(arr):
-        return (np.array(arr) - 2048) / 4096 * (2*math.pi)
+        return -(np.array(arr) - 2048) / 4096 * (2*math.pi)
         
     @staticmethod
     def to_raw_unit(arr):
-        return (np.array(arr) / (2*math.pi) * 4096 + 2048).astype(int)
+        return (-np.array(arr) / (2*math.pi) * 4096 + 2048).astype(int)
 
     def __init__(self, name, state_cb=None, pong_cb=None):
+        logger.info(name)
+
         self.state_cb = state_cb
         self.pong_cb = pong_cb
 
@@ -40,10 +43,12 @@ class ArmController:
         # self.ser.rts = False
 
         self.lock = threading.Lock()
-        self.last_position = np.array([2048, 2560, 1536, 2048, 2048, 2048, 1200])
-        self.last_velocity = np.array([0, 0, 0, 0, 0, 0, 0])
-        self.last_effort = np.array([0, 0, 0, 0, 0, 0, 0])
-        self.last_time = time.time()
+        self.last_time = None
+        
+        self.last_position = None
+        self.last_velocity = None
+        self.last_effort = None
+        self.last_time = None
 
         self.write_lock = threading.Lock()
 
@@ -51,6 +56,7 @@ class ArmController:
         self.config_cb_lock = threading.Lock()
 
         self.quit = threading.Event()
+
         self.t = threading.Thread(target=self.recv_thread)
         self.t.daemon = True
         self.t.start()
@@ -64,16 +70,21 @@ class ArmController:
                     sys.stdout.flush()
                     continue
                 
-                data += self.ser.read(16 - 1)
-                assert(len(data) == 16)
+                data += self.ser.read(self.COMM_LEN - 1)
+                assert(len(data) == self.COMM_LEN)
 
                 if data[1] == self.COMM_TYPE_PONG:
                     if self.state_cb is not None:
-                        self.pong_cb(struct.unpack('>xxHHHHHHH', data))
+                        self.pong_cb(struct.unpack('>xxHHHHHHxxxx', data))
                 elif data[1] == self.COMM_TYPE_FEEDBACK:
-                    position = self.to_si_unit(np.array(struct.unpack('>xxHHHHHHH', data)))
+                    position = self.to_si_unit(np.array(struct.unpack('>xxHHHHHHxxxx', data)))
                     this_time = time.time()
                     with self.lock:
+                        if self.last_time is None:
+                            self.last_position = position
+                            self.last_velocity = np.array([0, 0, 0, 0, 0, 0])
+                            self.last_effort = np.array([0, 0, 0, 0, 0, 0])
+                            self.last_time = this_time - 1 # in case of dividing 0
                         delta_time = this_time - self.last_time
                         velocity = (position - self.last_position) / delta_time 
                         effort = (velocity - self.last_velocity) / delta_time # without bias (gravity) and mass
@@ -99,20 +110,16 @@ class ArmController:
 
     def write(self, encoded_data):
         with self.write_lock:
+            # print(encoded_data)
             self.ser.write(encoded_data)
 
-    def cmd(self, type, data):
-        self.write(struct.pack('>BBHHHHHHH', self.COMM_HEAD, type, *data))
-
-    JOINT_MIN = np.array([-math.pi*0.75, -math.pi/2, -math.pi/2, -math.pi/2, -math.pi/2, -math.pi*0.75, -math.pi/2])
-    JOINT_MAX = np.array([math.pi*0.75, math.pi/2, math.pi/2, math.pi/2, math.pi/2, math.pi*0.75, math.pi/2])
+    JOINT_MIN = np.array([-math.pi/2, -math.pi/2, -math.pi*0.75, -math.pi/2, -math.pi*0.75, -math.pi/2])
+    JOINT_MAX = np.array([math.pi/2, math.pi/2, math.pi*0.75, math.pi/2, math.pi*0.75, math.pi/2])
 
     def set_pos(self, pos):
         pos_protected = np.minimum(np.maximum(np.array(pos), self.JOINT_MIN), self.JOINT_MAX)
         if all(np.isclose(pos, pos_protected, atol=0.01)):
-            pos[6] += 0.3
-            
-            self.write(struct.pack('>BBHHHHHHH', self.COMM_HEAD, self.COMM_TYPE_CTRL, *self.to_raw_unit(pos)))
+            self.write(struct.pack('>BBHHHHHHxxxx', self.COMM_HEAD, self.COMM_TYPE_CTRL, *self.to_raw_unit(pos)))
         else:
             logger.error(f"Arm reach min/max!!! {pos} {pos_protected}")
         
@@ -131,8 +138,8 @@ def main(args=None):
     node.declare_parameter('device', '/dev/ttyUSB0')
 
     device = node.get_parameter('device').value
-    
-    logger.info(device)
+
+    right_controller = ArmController(device)
 
     joint_state_publisher = node.create_publisher(sensor_msgs.msg.JointState, "/joint_states", 10)
 
@@ -147,37 +154,65 @@ def main(args=None):
         "joint_r7r": 0
     }
     
-    def publish_joint_states():
-        while True:
-            msg = sensor_msgs.msg.JointState()
-            msg.header.stamp = node.get_clock().now().to_msg()
+    # def publish_joint_states():
+    #     while True:
+    #         msg = sensor_msgs.msg.JointState()
+    #         msg.header.stamp = node.get_clock().now().to_msg()
             
-            msg.name = [
-                "joint_r1", 
-                "joint_r2", 
-                "joint_r3", 
-                "joint_r4", 
-                "joint_r5", 
-                "joint_r6", 
-                "joint_r7l", 
-                "joint_r7r" 
-            ]
-            msg.position = [ 
-                float(joint_pos["joint_r1"]), 
-                float(joint_pos["joint_r2"]), 
-                float(joint_pos["joint_r3"]), 
-                float(joint_pos["joint_r4"]), 
-                float(joint_pos["joint_r5"]), 
-                float(joint_pos["joint_r6"]), 
-                float(joint_pos["joint_r7l"]), 
-                float(joint_pos["joint_r7r"]) 
-            ]
+    #         msg.name = [
+    #             "joint_r1", 
+    #             "joint_r2", 
+    #             "joint_r3", 
+    #             "joint_r4", 
+    #             "joint_r5", 
+    #             "joint_r6", 
+    #             "joint_r7l", 
+    #             "joint_r7r" 
+    #         ]
+    #         msg.position = [ 
+    #             float(joint_pos["joint_r1"]), 
+    #             float(joint_pos["joint_r2"]), 
+    #             float(joint_pos["joint_r3"]), 
+    #             float(joint_pos["joint_r4"]), 
+    #             float(joint_pos["joint_r5"]), 
+    #             float(joint_pos["joint_r6"]), 
+    #             float(joint_pos["joint_r7l"]), 
+    #             float(joint_pos["joint_r7r"]) 
+    #         ]
 
-            joint_state_publisher.publish(msg)
-            time.sleep(0.1)
-    t = threading.Thread(target=publish_joint_states)
-    t.daemon = True
-    t.start()
+    #         joint_state_publisher.publish(msg)
+    #         time.sleep(0.1)
+    # t = threading.Thread(target=publish_joint_states)
+    # t.daemon = True
+    # t.start()
+
+    def state_cb(position, velocity, effort, this_time):
+        msg = sensor_msgs.msg.JointState()
+        msg.header.stamp = node.get_clock().now().to_msg()
+        
+        msg.name = [
+            "joint_r1", 
+            "joint_r2", 
+            "joint_r3", 
+            "joint_r4", 
+            "joint_r5", 
+            "joint_r6", 
+            "joint_r7l", 
+            "joint_r7r" 
+        ]
+        msg.position = [ 
+            float(0.1), 
+            float(position[0]), 
+            float(position[1]), 
+            float(position[2]), 
+            float(position[3]), 
+            float(position[4]), 
+            -float(position[5]), 
+            float(position[5]), 
+        ]
+
+        joint_state_publisher.publish(msg)
+    right_controller.state_cb = state_cb
 
     def execute_callback(goal_handle: rclpy.action.server.ServerGoalHandle):
         # https://docs.ros.org/en/foxy/Tutorials/Intermediate/Writing-an-Action-Server-Client/Py.html
@@ -205,6 +240,14 @@ def main(args=None):
         '/astra_right_arm_controller/follow_joint_trajectory',
         execute_callback
     )
+    
+    def do_pose():
+        while True:
+            right_controller.set_pos([joint_pos["joint_r2"], joint_pos["joint_r3"], joint_pos["joint_r4"], joint_pos["joint_r5"], joint_pos["joint_r6"], joint_pos["joint_r7r"]])
+            time.sleep(0.01)
+    t = threading.Thread(target=do_pose)
+    t.daemon = True
+    t.start()
 
     rclpy.spin(node)
 
