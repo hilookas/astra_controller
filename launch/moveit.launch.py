@@ -75,33 +75,11 @@ def generate_launch_description():
         )
     )
 
-    # ros2 control add lots of unnecessary complexity...
-
-    # Fake joint driver
-    # ld.add_action(
-    #     Node(
-    #         package="controller_manager",
-    #         executable="ros2_control_node",
-    #         parameters=[
-    #             moveit_config.robot_description,
-    #             str(moveit_config.package_path / "config/ros2_controllers.yaml"),
-    #         ],
-    #     )
-    # )
-    
-    # # spawn_controllers.launch.py
-    # controller_names = moveit_config.trajectory_execution.get(
-    #     "moveit_simple_controller_manager", {}
-    # ).get("controller_names", [])
-    # controller_names += ["joint_state_broadcaster"]
-    # for controller in controller_names:
-    #     ld.add_action(
-    #         Node(
-    #             package="controller_manager",
-    #             executable="spawner",
-    #             arguments=[controller],
-    #             output="screen",
-    #         )
-    #     )
+    ld.add_action(
+        Node(
+            package="astra_controller",
+            executable="moveit_node",
+        )
+    )
 
     return ld
