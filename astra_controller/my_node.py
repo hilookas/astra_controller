@@ -25,14 +25,22 @@ class ArmController:
     COMM_TYPE_CONFIG_WRITE = 0x05
     COMM_TYPE_CONFIG_READ = 0x06
     COMM_TYPE_CONFIG_FEEDBACK = 0x07
+        
+    GRIPPER_GEAR_R = 0.027 / 2
 
     @staticmethod
     def to_si_unit(arr):
-        return -(np.array(arr) - 2048) / 4096 * (2*math.pi)
-        
+        arr = -(np.array(arr) - 2048) / 4096 * (2*math.pi)
+        arr[-1] *= ArmController.GRIPPER_GEAR_R
+        arr[-1] += 0.03 # 标定的时候，中点要设置为夹爪张开60mm的时候（左右各30mm）
+        return arr
+
     @staticmethod
     def to_raw_unit(arr):
-        return (-np.array(arr) / (2*math.pi) * 4096 + 2048).astype(int)
+        arr[-1] -= 0.03
+        arr[-1] /= ArmController.GRIPPER_GEAR_R
+        arr = (-np.array(arr) / (2*math.pi) * 4096 + 2048).astype(int)
+        return arr
 
     def __init__(self, name, state_cb=None, pong_cb=None):
         logger.info(name)
@@ -61,6 +69,9 @@ class ArmController:
         self.t = threading.Thread(target=self.recv_thread)
         self.t.daemon = True
         self.t.start()
+
+        while self.last_position is None: # wait for init done
+            time.sleep(0.1)
 
     def recv_thread(self):
         try:
@@ -351,6 +362,33 @@ def main(args=None):
         node,
         control_msgs.action.FollowJointTrajectory,
         '/astra_right_arm_controller/follow_joint_trajectory',
+        execute_callback
+    )
+
+    def execute_callback(goal_handle: rclpy.action.server.ServerGoalHandle):
+        # https://docs.ros.org/en/foxy/Tutorials/Intermediate/Writing-an-Action-Server-Client/Py.html
+        node.get_logger().info('Executing goal...')
+        # print(goal_handle.request.trajectory.joint_names) # ['joint_r1', 'joint_r2', 'joint_r3', 'joint_r4', 'joint_r5', 'joint_r6']
+        # print(goal_handle.request.trajectory.points[-1].positions) # trajectory_msgs.msg.JointTrajectoryPoint(positions=[0.1,0.2,...], velocities=...)
+
+        for joint_name, position in zip(
+            goal_handle.request.trajectory.joint_names, 
+            goal_handle.request.trajectory.points[-1].positions
+        ):
+            joint_pos[joint_name] = position
+        
+        # ignore publish_feedback
+
+        goal_handle.succeed()
+
+        result = control_msgs.action.FollowJointTrajectory.Result()
+        result.error_code = control_msgs.action.FollowJointTrajectory.Result.SUCCESSFUL
+        result.error_string = "SUCC"
+        return result
+    action_server = rclpy.action.ActionServer(
+        node,
+        control_msgs.action.FollowJointTrajectory,
+        '/astra_right_hand_controller/follow_joint_trajectory',
         execute_callback
     )
     
