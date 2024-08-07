@@ -1,0 +1,66 @@
+from astra_teleop.process import process as teleop_process
+import geometry_msgs.msg
+import rclpy.node
+from pytransform3d import transformations as pt
+from rclpy.publisher import Publisher
+import numpy as np
+
+rclpy.init()
+node = rclpy.node.Node("teleop")
+
+pub_cam = node.create_publisher(geometry_msgs.msg.PoseStamped, "/cam_pose", 10)
+pub = node.create_publisher(geometry_msgs.msg.PoseStamped, "/goal_pose", 10)
+pub1 = node.create_publisher(geometry_msgs.msg.PoseStamped, "/goal_pose1", 10)
+pub2 = node.create_publisher(geometry_msgs.msg.PoseStamped, "/goal_pose2", 10)
+
+def pub_T(pub: Publisher, T):
+    msg = geometry_msgs.msg.PoseStamped()
+    msg.header.frame_id = 'base_link'
+    msg.header.stamp = node.get_clock().now().to_msg()
+    pq = pt.pq_from_transform(T)
+    msg.pose.position.x = pq[0]
+    msg.pose.position.y = pq[1]
+    msg.pose.position.z = pq[2]
+    msg.pose.orientation.w = pq[3]
+    msg.pose.orientation.x = pq[4]
+    msg.pose.orientation.y = pq[5]
+    msg.pose.orientation.z = pq[6]
+    pub.publish(msg)
+
+Tcamgoal_last = None
+
+def cb(
+    Tcamgoal, 
+    # Tcamgoal1, Tcamgoal2
+):
+    # 将摄像头坐标系从base link坐标系 移动+旋转到正确位置
+    Tscam = np.array([
+        [0, 0, -1, 1.5], 
+        [1, 0, 0, -0.5], 
+        [0, -1, 0, 0], 
+        [0, 0, 0, 1], 
+    ])
+    pub_T(pub_cam, Tscam)
+
+    global Tcamgoal_last
+    if Tcamgoal_last is None:
+        Tcamgoal_last = Tcamgoal
+    low_pass_coff = 0.4
+    Tcamgoal = pt.transform_from_pq(pt.pq_slerp(
+        pt.pq_from_transform(Tcamgoal_last),
+        pt.pq_from_transform(Tcamgoal),
+        low_pass_coff
+    ))
+    Tcamgoal_last = Tcamgoal
+    
+    Tsgoal = Tscam @ Tcamgoal
+    pub_T(pub, Tsgoal)
+    
+    # pub_T(pub1, Tscam @ Tcamgoal1)
+    # pub_T(pub2, Tscam @ Tcamgoal2)
+
+teleop_process(
+    device="/dev/video0", calibration_directory="./calibration_images", 
+    left_handle_cb=None, right_handle_cb=cb,
+    debug=True
+)
