@@ -24,7 +24,10 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'moveit_node = astra_controller.moveit_node:main'
+            'moveit_relay_node = astra_controller.moveit_relay_node:main',
+            'teleop_node = astra_controller.teleop_node:main',
+            'ik_node = astra_controller.ik_node:main',
+            'dry_run_node = astra_controller.dry_run_node:main',
         ],
     },
 )

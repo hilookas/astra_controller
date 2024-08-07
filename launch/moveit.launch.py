@@ -78,7 +78,19 @@ def generate_launch_description():
     ld.add_action(
         Node(
             package="astra_controller",
-            executable="moveit_node",
+            executable="moveit_relay_node",
+        )
+    )
+
+    ld.add_action(
+        Node(
+            package="astra_controller",
+            executable="dry_run_node",
+            parameters=[
+                {
+                    "actively_send_joint_state": True,
+                },
+            ],
         )
     )
 
