@@ -28,6 +28,8 @@ setup(
             'teleop_node = astra_controller.teleop_node:main',
             'ik_node = astra_controller.ik_node:main',
             'dry_run_node = astra_controller.dry_run_node:main',
+            'arm_node = astra_controller.arm_node:main',
+            'lift_node = astra_controller.lift_node:main',
         ],
     },
 )
