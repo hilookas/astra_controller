@@ -80,9 +80,9 @@ class BaseController:
             angular_vel = (right_vel - left_vel) / 2 * (math.pi * self.WHEEL_D) / (self.WHEEL_BASE / 2)
 
             if node_id == self.LEFT_NODE_ID:
-                self.last_left_vel = vel
+                self.last_left_vel = left_vel
             else:
-                self.last_right_vel = vel
+                self.last_right_vel = right_vel
             self.last_time = this_time
             if self.state_cb is not None:
                 self.state_cb(linear_vel, angular_vel, delta_time)

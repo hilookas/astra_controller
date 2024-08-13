@@ -18,13 +18,13 @@ def main(args=None):
     node = rclpy.node.Node('base_node')
 
     logger = node.get_logger()
-    
+
     node.declare_parameter('device', 'can0')
 
     device = node.get_parameter('device').value
-    
+
     base_controller = BaseController(device)
-    
+
     pos_x = 0
     pos_y = 0
     pos_theta = 0
@@ -34,17 +34,17 @@ def main(args=None):
 
     def cb(linear_vel, angular_vel, dt):
         nonlocal pos_x, pos_y, pos_theta
-        
+
         d_x = linear_vel * math.cos(pos_theta) * dt
         d_y = linear_vel * math.sin(pos_theta) * dt
         d_theta = angular_vel * dt
-        
+
         pos_x += d_x
         pos_y += d_y
         pos_theta += d_theta
         quat = pr.quaternion_from_angle(2, pos_theta)
-        
-        
+
+
         odom_msg = nav_msgs.msg.Odometry()
         odom_msg.header.stamp = node.get_clock().now().to_msg()
         odom_msg.header.frame_id = "odom" # odom is fixed to map, base_link is reletive to odom
@@ -57,19 +57,19 @@ def main(args=None):
         odom_msg.pose.pose.orientation.x = quat[1]
         odom_msg.pose.pose.orientation.y = quat[2]
         odom_msg.pose.pose.orientation.z = quat[3]
-        
+
         odom_msg.twist.twist.linear.x = linear_vel
         odom_msg.twist.twist.linear.y = 0.0
         odom_msg.twist.twist.angular.z = angular_vel
 
         odom_publisher.publish(odom_msg)
-        
-        
+
+
         tf_msg = geometry_msgs.msg.TransformStamped()
         tf_msg.header.stamp = node.get_clock().now().to_msg()
         tf_msg.header.frame_id = "odom"
         tf_msg.child_frame_id = "base_link"
-        
+
         tf_msg.transform.translation.x = odom_msg.pose.pose.position.x
         tf_msg.transform.translation.y = odom_msg.pose.pose.position.y
         tf_msg.transform.translation.z = odom_msg.pose.pose.position.z
@@ -77,7 +77,7 @@ def main(args=None):
 
         tf_broadcaster.sendTransform(tf_msg)
     base_controller.state_cb = cb
-    
+
     def cb(msg: geometry_msgs.msg.Twist):
         base_controller.set_vel(msg.linear.x, msg.angular.z)
     node.create_subscription(geometry_msgs.msg.Twist, '/cmd_vel', cb, rclpy.qos.qos_profile_sensor_data)
