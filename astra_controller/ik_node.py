@@ -15,7 +15,6 @@ from pytransform3d import transformations as pt
 import logging
 
 logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.DEBUG)
 
 np.set_printoptions(precision=4, suppress=True)
 

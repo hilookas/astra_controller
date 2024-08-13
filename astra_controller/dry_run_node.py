@@ -11,7 +11,6 @@ import time
 import logging
 
 logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.DEBUG)
 
 np.set_printoptions(precision=4, suppress=True)
 
@@ -47,8 +46,7 @@ def main(args=None):
 
                 joint_state_publisher.publish(msg)
                 time.sleep(0.1)
-        t = threading.Thread(target=publish_joint_states)
-        t.daemon = True
+        t = threading.Thread(target=publish_joint_states, daemon=True)
         t.start()
 
     def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):

@@ -9,7 +9,6 @@ import sys
 import logging
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
 
 class ArmController:
     COMM_LEN = 2 + 16
@@ -22,7 +21,7 @@ class ArmController:
     COMM_TYPE_CONFIG_WRITE = 0x05
     COMM_TYPE_CONFIG_READ = 0x06
     COMM_TYPE_CONFIG_FEEDBACK = 0x07
-        
+
     GRIPPER_GEAR_R = 0.027 / 2
 
     @staticmethod
@@ -51,7 +50,7 @@ class ArmController:
         # self.ser.rts = False
 
         self.lock = threading.Lock()
-        
+
         self.last_position = None
         self.last_velocity = None
         self.last_effort = None
@@ -64,8 +63,7 @@ class ArmController:
 
         self.quit = threading.Event()
 
-        self.t = threading.Thread(target=self.recv_thread)
-        self.t.daemon = True
+        self.t = threading.Thread(target=self.recv_thread, daemon=True)
         self.t.start()
 
         while self.last_position is None: # wait for init done
@@ -79,7 +77,7 @@ class ArmController:
                     sys.stdout.buffer.write(data)
                     sys.stdout.flush()
                     continue
-                
+
                 data += self.ser.read(self.COMM_LEN - 1)
                 assert(len(data) == self.COMM_LEN)
 
@@ -96,7 +94,7 @@ class ArmController:
                             self.last_effort = np.array([0, 0, 0, 0, 0, 0])
                             self.last_time = this_time - 1 # in case of dividing 0
                         delta_time = this_time - self.last_time
-                        velocity = (position - self.last_position) / delta_time 
+                        velocity = (position - self.last_position) / delta_time
                         effort = (velocity - self.last_velocity) / delta_time # without bias (gravity) and mass
                         self.last_position = position
                         self.last_velocity = velocity
@@ -133,7 +131,7 @@ class ArmController:
             self.write(struct.pack('>BBHHHHHHxxxx', self.COMM_HEAD, self.COMM_TYPE_CTRL, *self.to_raw_unit(pos)))
         else:
             logger.error(f"Arm reach min/max!!! {pos} {pos_protected}")
-        
+
     def __del__(self):
         self.quit.set()
         self.ser.close()
