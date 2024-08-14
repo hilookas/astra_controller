@@ -7,7 +7,7 @@ import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 
 class BaseController:
     LEFT_NODE_ID = 0

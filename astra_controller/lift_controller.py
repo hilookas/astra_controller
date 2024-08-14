@@ -8,6 +8,7 @@ import sys
 import logging
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 class LiftController:
     COMM_LEN = 2 + 16
