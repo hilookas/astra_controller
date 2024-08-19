@@ -1,11 +1,13 @@
+from pprint import pprint
 import rclpy
 import rclpy.node
 import rclpy.publisher
 
 import geometry_msgs.msg
-from astra_teleop.process import process as teleop_process
+from astra_teleop_web.webserver import WebServer, feed_webserver
 from pytransform3d import transformations as pt
 import numpy as np
+import threading
 
 def main(args=None):
     rclpy.init(args=args)
@@ -62,11 +64,37 @@ def main(args=None):
         # pub_T(pub1, Tscam @ Tcamgoal1)
         # pub_T(pub2, Tscam @ Tcamgoal2)
 
-    teleop_process(
-        device="/dev/video0", calibration_directory="./calibration_images", 
-        left_hand_cb=None, right_hand_cb=cb,
-        debug=False
-    )
+    webserver = WebServer()
+    
+    threading.Thread(target=feed_webserver, args=(webserver, "head"), daemon=True).start()
+    threading.Thread(target=feed_webserver, args=(webserver, "wrist_left"), daemon=True).start()
+    threading.Thread(target=feed_webserver, args=(webserver, "wrist_right"), daemon=True).start()
+    
+    webserver.left_hand_cb = cb
+    # webserver.right_hand_cb = cb
+    
+    cmd_vel_publisher = node.create_publisher(geometry_msgs.msg.Twist, '/cmd_vel', 10)
+        
+    def cb(pedal_real_values):
+        # print("pedal")
+        non_sensetive_area = 0.1
+        cliped_pedal_real_values = np.clip((np.array(pedal_real_values) - 0.5) / (0.5 - non_sensetive_area) * 0.5 + 0.5, 0, 1)
+        pedal_names = ["linear-neg", "linear-pos", "angular-neg", "angular-pos", "mode-select", "left-gripper", "right-gripper"]
+        # pprint(cliped_pedal_real_values)
+        values = dict(zip(pedal_names, cliped_pedal_real_values))
+        LINEAR_VEL_MAX = 1
+        ANGULAR_VEL_MAX = 1
+        linear_vel = (values["linear-pos"] - values["linear-neg"]) * LINEAR_VEL_MAX
+        angular_vel = (values["angular-pos"] - values["angular-neg"]) * ANGULAR_VEL_MAX
+        
+        msg = geometry_msgs.msg.Twist()
+
+        msg.linear.x = linear_vel
+        msg.angular.z = angular_vel
+
+        cmd_vel_publisher.publish(msg)
+        
+    webserver.pedal_cb = cb
 
     rclpy.spin(node) # will never go here
 
