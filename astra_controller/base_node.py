@@ -82,7 +82,11 @@ def main(args=None):
         base_controller.set_vel(msg.linear.x, msg.angular.z)
     node.create_subscription(geometry_msgs.msg.Twist, 'cmd_vel', cb, rclpy.qos.qos_profile_sensor_data)
 
-    rclpy.spin(node)
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt as err:
+        base_controller.stop()
+        raise err
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically

@@ -118,7 +118,7 @@ class BaseController:
         try:
             while True:
                 if self.quit.is_set():
-                    return
+                    raise Exception("quit")
                 with self.write_lock:
                     drv.set_input_vel(self.setpoint[node_id])
                 drv.check_errors()
@@ -134,5 +134,10 @@ class BaseController:
             self.setpoint[self.LEFT_NODE_ID] = left_vel
             self.setpoint[self.RIGHT_NODE_ID] = right_vel
 
+    def stop(self):
+        if not self.quit.is_set():
+            self.quit.set()
+            time.sleep(0.1)
+
     def __del__(self):
-        self.quit.set()
+        self.stop()

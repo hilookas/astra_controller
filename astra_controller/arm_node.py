@@ -9,7 +9,6 @@ import astra_controller_interfaces.msg
 import astra_controller_interfaces.srv
 import threading
 import struct
-import numpy as np
 
 from .arm_controller import ArmController
 
@@ -119,15 +118,15 @@ def main(args=None):
     node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, 'gripper_joint_command', cb, rclpy.qos.qos_profile_sensor_data)
     
     def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
-        cmd_data = [round(x) for x in msg.position]
-        logger.info(f'torque cmd: {cmd_data}')
-        arm_controller.write(struct.pack('>BBHHHHHHH', arm_controller.COMM_HEAD, arm_controller.COMM_TYPE_TORQUE, *cmd_data))
+        torque = round(msg.cmd[0])
+        logger.info(f'torque cmd: {torque}')
+        arm_controller.set_torque(torque)
     node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, 'torque_command', cb, rclpy.qos.qos_profile_sensor_data)
     
     def cb(msg: std_msgs.msg.UInt16MultiArray):
         cmd_data = msg.data
         logger.info(f'ping cmd: {cmd_data}')
-        arm_controller.write(struct.pack('>BBHHHHHHH', arm_controller.COMM_HEAD, arm_controller.COMM_TYPE_PING, *cmd_data))
+        arm_controller.write(struct.pack('>BBHHHHHHHH', arm_controller.COMM_HEAD, arm_controller.COMM_TYPE_PING, *cmd_data))
     node.create_subscription(std_msgs.msg.UInt16MultiArray, 'ping', cb, rclpy.qos.qos_profile_sensor_data)
 
     def cb(
@@ -239,7 +238,11 @@ def main(args=None):
         return response
     node.create_service(astra_controller_interfaces.srv.WriteConfigFloat, '/write_config_float', cb)
 
-    rclpy.spin(node)
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt as err:
+        arm_controller.stop()
+        raise err
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically

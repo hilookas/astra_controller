@@ -9,12 +9,13 @@ import numpy as np
 
 def main(args=None):
     rclpy.init(args=args)
+    
     node = rclpy.node.Node("teleop_node")
 
-    pub_cam = node.create_publisher(geometry_msgs.msg.PoseStamped, "/cam_pose", 10)
-    pub = node.create_publisher(geometry_msgs.msg.PoseStamped, "/goal_pose", 10)
-    # pub1 = node.create_publisher(geometry_msgs.msg.PoseStamped, "/goal_pose1", 10)
-    # pub2 = node.create_publisher(geometry_msgs.msg.PoseStamped, "/goal_pose2", 10)
+    pub_cam = node.create_publisher(geometry_msgs.msg.PoseStamped, "cam_pose", 10)
+    pub = node.create_publisher(geometry_msgs.msg.PoseStamped, "goal_pose", 10)
+    # pub1 = node.create_publisher(geometry_msgs.msg.PoseStamped, "goal_pose1", 10)
+    # pub2 = node.create_publisher(geometry_msgs.msg.PoseStamped, "goal_pose2", 10)
 
     def pub_T(pub: rclpy.publisher.Publisher, T):
         msg = geometry_msgs.msg.PoseStamped()

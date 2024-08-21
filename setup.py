@@ -32,6 +32,7 @@ setup(
             'dry_run_node = astra_controller.dry_run_node:main',
             'arm_node = astra_controller.arm_node:main',
             'lift_node = astra_controller.lift_node:main',
+            'base_node = astra_controller.base_node:main',
         ],
     },
 )

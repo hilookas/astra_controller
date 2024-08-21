@@ -63,6 +63,8 @@ class ArmController:
         self.config_cb_lock = threading.Lock()
 
         self.quit = threading.Event()
+        
+        self.set_torque(1)
 
         self.t = threading.Thread(target=self.recv_thread, daemon=True)
         self.t.start()
@@ -108,8 +110,6 @@ class ArmController:
                 else:
                     sys.stdout.buffer.write(data)
                     sys.stdout.flush()
-        # except Exception:
-        #     pass
         finally:
             logger.info("thread exiting")
 
@@ -132,6 +132,15 @@ class ArmController:
         else:
             logger.error(f"Arm reach min/max!!! {pos} {pos_protected}")
 
+    def set_torque(self, torque):
+        self.write(struct.pack('>BBBxxxxxxxxxxxxxxx', self.COMM_HEAD, self.COMM_TYPE_TORQUE, torque))
+        
+    def stop(self):
+        if not self.quit.is_set():
+            self.quit.set()
+            self.set_torque(0)
+            self.ser.flushOutput()
+            self.ser.close()
+
     def __del__(self):
-        self.quit.set()
-        self.ser.close()
+        self.stop()

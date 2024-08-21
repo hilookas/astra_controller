@@ -73,6 +73,37 @@ def generate_launch_description():
         )
     )
     
+    # Real Arms
+    ld.add_action(
+        Node(
+            package=package_name,
+            executable="lift_node",
+            namespace='left/lift',
+            parameters=[{
+                'device': '/dev/tty_puppet_lift_left',
+                'side': 'left',
+            }],
+            remappings=[
+                ('joint_states', '/joint_states'),
+            ],
+        )
+    )
+    
+    ld.add_action(
+        Node(
+            package=package_name,
+            executable="arm_node",
+            namespace='left/arm',
+            parameters=[{
+                'device': '/dev/tty_puppet_left',
+                'side': 'left',
+            }],
+            remappings=[
+                ('joint_states', '/joint_states'),
+            ],
+        )
+    )
+    
     ld.add_action(
         Node(
             package=package_name,
@@ -103,13 +134,13 @@ def generate_launch_description():
         )
     )
     
+    # # Fake Arms
     # ld.add_action(
     #     Node(
     #         package=package_name,
-    #         executable="lift_node",
-    #         namespace='left/lift',
+    #         executable="dry_run_node",
+    #         namespace='left',
     #         parameters=[{
-    #             'device': '/dev/tty_puppet_lift_left',
     #             'side': 'left',
     #         }],
     #         remappings=[
@@ -121,17 +152,28 @@ def generate_launch_description():
     # ld.add_action(
     #     Node(
     #         package=package_name,
-    #         executable="arm_node",
-    #         namespace='left/arm',
+    #         executable="dry_run_node",
+    #         namespace='right',
     #         parameters=[{
-    #             'device': '/dev/tty_puppet_left',
-    #             'side': 'left',
+    #             'side': 'right',
     #         }],
     #         remappings=[
     #             ('joint_states', '/joint_states'),
     #         ],
     #     )
     # )
+    
+    # IK
+    ld.add_action(
+        Node(
+            package=package_name,
+            executable="ik_node",
+            namespace='left',
+            parameters=[{
+                'side': 'left',
+            }],
+        )
+    )
     
     ld.add_action(
         Node(
@@ -144,34 +186,26 @@ def generate_launch_description():
         )
     )
     
-    # ld.add_action(
-    #     Node(
-    #         package=package_name,
-    #         executable="ik_node",
-    #         namespace='left',
-    #         parameters=[{
-    #             'side': 'left',
-    #         }],
-    #     )
-    # )
+    # Base
+    ld.add_action(
+        Node(
+            package=package_name,
+            executable="base_node",
+            parameters=[{
+                'device': 'can0',
+            }],
+        )
+    )
     
+    # Teleop (Web)
     ld.add_action(
         Node(
             package=package_name,
             executable="teleop_web_node",
         )
     )
-
-    ld.add_action(
-        Node(
-            package="rviz2",
-            executable="rviz2",
-            respawn=False,
-            arguments=["-d", LaunchConfiguration("rviz_config")],
-            output={'both': 'log'},
-        )
-    )
     
+    # Visualization
     ld.add_action(
         IncludeLaunchDescription(
             FrontendLaunchDescriptionSource([

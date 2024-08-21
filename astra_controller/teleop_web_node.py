@@ -15,6 +15,7 @@ import sensor_msgs.msg
 
 def main(args=None):
     rclpy.init(args=args)
+
     node = rclpy.node.Node("teleop_node")
 
     webserver = WebServer()
@@ -33,45 +34,55 @@ def main(args=None):
         msg.pose.orientation.z = pq[6]
         pub.publish(msg)
 
-    pub_cam = node.create_publisher(geometry_msgs.msg.PoseStamped, f"cam_pose", 10)
-    pub = node.create_publisher(geometry_msgs.msg.PoseStamped, f"goal_pose", 10)
-    # pub1 = node.create_publisher(geometry_msgs.msg.PoseStamped, f"goal_pose1", 10)
-    # pub2 = node.create_publisher(geometry_msgs.msg.PoseStamped, f"goal_pose2", 10)
+    def get_cb(side):
+        pub_cam = node.create_publisher(geometry_msgs.msg.PoseStamped, f"{side}/cam_pose", 10)
+        pub = node.create_publisher(geometry_msgs.msg.PoseStamped, f"{side}/goal_pose", 10)
+        # pub1 = node.create_publisher(geometry_msgs.msg.PoseStamped, f"{side}/goal_pose1", 10)
+        # pub2 = node.create_publisher(geometry_msgs.msg.PoseStamped, f"{side}/goal_pose2", 10)
 
-    Tcamgoal_last = None
+        Tcamgoal_last = None
 
-    def cb(
-        Tcamgoal, 
-        # Tcamgoal1, Tcamgoal2
-    ):
-        # 将摄像头坐标系从base link坐标系 移动+旋转到正确位置
-        Tscam = np.array([
-            [0, 0, -1, 1.5], 
-            [1, 0, 0, -0.5], 
-            [0, -1, 0, 0.5], 
-            [0, 0, 0, 1], 
-        ])
-        pub_T(pub_cam, Tscam)
+        def cb(
+            Tcamgoal, 
+            # Tcamgoal1, Tcamgoal2
+        ):
+            # 将摄像头坐标系从base link坐标系 移动+旋转到正确位置
+            if side == "left":
+                Tscam = np.array([
+                    [0, 0, -1, 1.0], 
+                    [1, 0, 0, 0.5], 
+                    [0, -1, 0, 0.5], 
+                    [0, 0, 0, 1], 
+                ])
+            elif side == "right":
+                Tscam = np.array([
+                    [0, 0, -1, 1.0], 
+                    [1, 0, 0, -0.5], 
+                    [0, -1, 0, 0.5], 
+                    [0, 0, 0, 1], 
+                ])
+            pub_T(pub_cam, Tscam)
 
-        nonlocal Tcamgoal_last
-        if Tcamgoal_last is None:
+            nonlocal Tcamgoal_last
+            if Tcamgoal_last is None:
+                Tcamgoal_last = Tcamgoal
+            low_pass_coff = 0.4
+            Tcamgoal = pt.transform_from_pq(pt.pq_slerp(
+                pt.pq_from_transform(Tcamgoal_last),
+                pt.pq_from_transform(Tcamgoal),
+                low_pass_coff
+            ))
             Tcamgoal_last = Tcamgoal
-        low_pass_coff = 0.4
-        Tcamgoal = pt.transform_from_pq(pt.pq_slerp(
-            pt.pq_from_transform(Tcamgoal_last),
-            pt.pq_from_transform(Tcamgoal),
-            low_pass_coff
-        ))
-        Tcamgoal_last = Tcamgoal
-        
-        Tsgoal = Tscam @ Tcamgoal
-        pub_T(pub, Tsgoal)
-        
-        # pub_T(pub1, Tscam @ Tcamgoal1)
-        # pub_T(pub2, Tscam @ Tcamgoal2)
+            
+            Tsgoal = Tscam @ Tcamgoal
+            pub_T(pub, Tsgoal)
+            
+            # pub_T(pub1, Tscam @ Tcamgoal1)
+            # pub_T(pub2, Tscam @ Tcamgoal2)
+        return cb
     
-    webserver.left_hand_cb = cb
-    
+    webserver.right_hand_cb = get_cb("right")
+    webserver.left_hand_cb = get_cb("left")
     
     def get_cb(name):
         def cb(msg):
@@ -100,16 +111,16 @@ def main(args=None):
 
 
     cmd_vel_publisher = node.create_publisher(geometry_msgs.msg.Twist, 'cmd_vel', 10)
-    
+        
     def cb(pedal_real_values):
         non_sensetive_area = 0.1
         cliped_pedal_real_values = np.clip((np.array(pedal_real_values) - 0.5) / (0.5 - non_sensetive_area) * 0.5 + 0.5, 0, 1)
-        pedal_names = ["linear-neg", "linear-pos", "angular-neg", "angular-pos", "mode-select", "left-gripper", "right-gripper"]
+        pedal_names = ["angular-neg", "angular-pos", "linear-neg", "linear-pos", "mode-select", "left-gripper", "right-gripper"]
         values = dict(zip(pedal_names, cliped_pedal_real_values))
         LINEAR_VEL_MAX = 1
         ANGULAR_VEL_MAX = 1
         linear_vel = (values["linear-pos"] - values["linear-neg"]) * LINEAR_VEL_MAX
-        angular_vel = (values["angular-pos"] - values["angular-neg"]) * ANGULAR_VEL_MAX
+        angular_vel = -(values["angular-pos"] - values["angular-neg"]) * ANGULAR_VEL_MAX
         
         msg = geometry_msgs.msg.Twist()
 

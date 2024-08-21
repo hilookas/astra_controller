@@ -14,6 +14,7 @@ import modern_robotics as mr
 import numpy as np
 from mr_urdf_loader import loadURDF
 from pytransform3d import transformations as pt
+import time
 
 import logging
 
@@ -44,10 +45,6 @@ def main(args=None):
         },
     }
 
-    arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "arm/joint_command", 10)
-
-    lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "lift/joint_command", 10)
-
     # Ref: interbotix_ros_toolboxes/interbotix_xs_toolbox/interbotix_xs_modules/interbotix_xs_modules/xs_robot/arm.py
     urdf_name = str(Path(get_package_share_directory("astra_description")) / "urdf" / "astra_description_rel.urdf")
     
@@ -66,6 +63,20 @@ def main(args=None):
         joint = robot.joint_map[joint_name]
         joint_limit_lower.append(joint.limit.lower)
         joint_limit_upper.append(joint.limit.upper)
+
+    arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "arm/joint_command", 10)
+    lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "lift/joint_command", 10)
+        
+    def pub_theta(theta_list):
+        msg = astra_controller_interfaces.msg.JointGroupCommand(
+            cmd=list(theta_list[1:])
+        )
+        arm_joint_command_publisher.publish(msg)
+
+        msg = astra_controller_interfaces.msg.JointGroupCommand(
+            cmd=list(theta_list[:1])
+        )
+        lift_joint_command_publisher.publish(msg)
 
     def set_ee_pose_matrix(
         T_sd: np.ndarray,
@@ -90,25 +101,15 @@ def main(args=None):
         )
         
         if not success:
-            logger.warn('failed guess')
-            logger.warn('No valid pose could be found. Will not execute')
+            logger.warn('Failed guess. Maybe EEF is out of range. No valid pose could be found. Will not execute')
             return theta_list, False
 
         # Check to make sure a solution was found and that no joint limits were violated
         if not ((joint_limit_lower <= theta_list) & (theta_list <= joint_limit_upper)).all():
-            logger.warn('guess over range')
-            logger.warn('No valid pose could be found. Will not execute')
+            logger.warn('Guess over range. No valid pose could be found. Will not execute')
             return theta_list, False
-
-        msg = astra_controller_interfaces.msg.JointGroupCommand(
-            cmd=list(theta_list[1:])
-        )
-        arm_joint_command_publisher.publish(msg)
-
-        msg = astra_controller_interfaces.msg.JointGroupCommand(
-            cmd=list(theta_list[:1])
-        )
-        lift_joint_command_publisher.publish(msg)
+        
+        pub_theta(theta_list)
 
         return theta_list, True
 

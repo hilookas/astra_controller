@@ -113,6 +113,10 @@ class LiftController:
         else:
             logger.error(f"Arm reach min/max!!! {pos} {pos_protected}")
 
+    def stop(self):
+        if not self.quit.is_set():
+            self.quit.set()
+            self.ser.close()
+
     def __del__(self):
-        self.quit.set()
-        self.ser.close()
+        self.stop()
