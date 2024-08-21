@@ -111,7 +111,7 @@ class ArmController:
         # except Exception:
         #     pass
         finally:
-            print("thread exiting")
+            logger.info("thread exiting")
 
     def get_pos(self): # 一帧可能会被用多次，但是绝对不会卡住
         with self.lock:
@@ -119,7 +119,6 @@ class ArmController:
 
     def write(self, encoded_data):
         with self.write_lock:
-            # print(encoded_data)
             self.ser.write(encoded_data)
 
     JOINT_MIN = np.array([-math.pi/2, -math.pi/2, -math.pi*0.75, -math.pi/2, -math.pi*0.75, -math.pi/2])

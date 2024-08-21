@@ -96,7 +96,7 @@ class LiftController:
         # except Exception:
         #     pass
         finally:
-            print("thread exiting")
+            logger.info("thread exiting")
 
     def get_pos(self): # 一帧可能会被用多次，但是绝对不会卡住
         with self.lock:
@@ -104,7 +104,6 @@ class LiftController:
 
     def write(self, encoded_data):
         with self.write_lock:
-            # print(encoded_data)
             self.ser.write(encoded_data)
 
     def set_pos(self, pos):
