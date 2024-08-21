@@ -1,9 +1,12 @@
+from pathlib import Path
 import rclpy
 import rclpy.node
 import rclpy.qos
 
 import geometry_msgs.msg
 import astra_controller_interfaces.msg
+
+from ament_index_python import get_package_share_directory
 
 from typing import Any, List, Tuple, Union
 
@@ -20,17 +23,36 @@ np.set_printoptions(precision=4, suppress=True)
 
 def main(args=None):
     rclpy.init(args=args)
+
     node = rclpy.node.Node("ik_node")
+    
+    node.declare_parameter('side', 'right')
 
-    arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "/arm_joint_command", 10)
+    side = node.get_parameter('side').value
+    
+    if side not in ['left', 'right']:
+        raise Exception("Unknown side")
+    
+    side_config = {
+        "left": {
+            "eef_link_name": "link_lee",
+            "actuated_joint_names": ['joint_l1', 'joint_l2', 'joint_l3', 'joint_l4', 'joint_l5', 'joint_l6'],
+        },
+        "right": {
+            "eef_link_name": "link_ree",
+            "actuated_joint_names": ['joint_r1', 'joint_r2', 'joint_r3', 'joint_r4', 'joint_r5', 'joint_r6'],
+        },
+    }
 
-    lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "/lift_joint_command", 10)
+    arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "arm/joint_command", 10)
+
+    lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "lift/joint_command", 10)
 
     # Ref: interbotix_ros_toolboxes/interbotix_xs_toolbox/interbotix_xs_modules/interbotix_xs_modules/xs_robot/arm.py
-    urdf_name = "/home/rosdev/ros2_ws/src/astra_description/urdf/astra_description_rel.urdf"
+    urdf_name = str(Path(get_package_share_directory("astra_description")) / "urdf" / "astra_description_rel.urdf")
     
-    eef_link_name="link_ree"
-    actuated_joint_names=['joint_r1', 'joint_r2', 'joint_r3', 'joint_r4', 'joint_r5', 'joint_r6']
+    eef_link_name=side_config[side]["eef_link_name"]
+    actuated_joint_names=side_config[side]["actuated_joint_names"]
 
     M, Slist, Blist, Mlist, Glist, robot = loadURDF(
         urdf_name, 
@@ -101,7 +123,7 @@ def main(args=None):
             msg.pose.orientation.z
         ])
         set_ee_pose_matrix(pt.transform_from_pq(pq))
-    node.create_subscription(geometry_msgs.msg.PoseStamped, "/goal_pose", cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(geometry_msgs.msg.PoseStamped, "goal_pose", cb, rclpy.qos.qos_profile_sensor_data)
 
     rclpy.spin(node)
 

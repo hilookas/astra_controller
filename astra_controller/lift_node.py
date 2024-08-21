@@ -17,19 +17,35 @@ def main(args=None):
     logger = node.get_logger()
     
     node.declare_parameter('device', '/dev/tty_puppet_lift_right')
+    node.declare_parameter('side', 'right')
 
     device = node.get_parameter('device').value
+    side = node.get_parameter('side').value
+    
+    if side not in ['left', 'right']:
+        raise Exception("Unknown side")
+    
+    side_config = {
+        "left": {
+            "joint_names": [
+                "joint_l1",
+            ],
+        },
+        "right": {
+            "joint_names": [
+                "joint_r1",
+            ],
+        },
+    }
 
     lift_controller = LiftController(device)
 
-    joint_state_publisher = node.create_publisher(sensor_msgs.msg.JointState, "/joint_states", 10)
+    joint_state_publisher = node.create_publisher(sensor_msgs.msg.JointState, "joint_states", 10)
     def cb(position, velocity, effort, this_time):
         msg = sensor_msgs.msg.JointState()
         msg.header.stamp = node.get_clock().now().to_msg()
         
-        msg.name = [
-            "joint_r1",
-        ]
+        msg.name = side_config[side]["joint_names"]
         msg.position = [ 
             float(position),
         ]
@@ -45,7 +61,7 @@ def main(args=None):
     
     def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
         lift_controller.set_pos(msg.cmd[0])
-    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, '/lift_joint_command', cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, 'joint_command', cb, rclpy.qos.qos_profile_sensor_data)
 
     rclpy.spin(node)
 

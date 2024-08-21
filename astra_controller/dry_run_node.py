@@ -18,7 +18,7 @@ def main(args=None):
     rclpy.init(args=args)
     node = rclpy.node.Node("dry_run_node")
 
-    joint_state_publisher = node.create_publisher(sensor_msgs.msg.JointState, "/joint_states", 10)
+    joint_state_publisher = node.create_publisher(sensor_msgs.msg.JointState, "joint_states", 10)
 
     node.declare_parameter('actively_send_joint_state', False)
 
@@ -59,7 +59,7 @@ def main(args=None):
 
         if actively_send_joint_state:
             joint_states.update(dict(zip(send_msg.name, send_msg.position)))
-    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "/arm_joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "arm/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
 
     def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
         send_msg = sensor_msgs.msg.JointState()
@@ -71,7 +71,7 @@ def main(args=None):
 
         if actively_send_joint_state:
             joint_states.update(dict(zip(send_msg.name, send_msg.position)))
-    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "/gripper_joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "arm/gripper_joint_command", cb, rclpy.qos.qos_profile_sensor_data)
 
     def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
         send_msg = sensor_msgs.msg.JointState()
@@ -83,7 +83,7 @@ def main(args=None):
 
         if actively_send_joint_state:
             joint_states.update(dict(zip(send_msg.name, send_msg.position)))
-    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "/lift_joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "lift_joint_command", cb, rclpy.qos.qos_profile_sensor_data)
 
     rclpy.spin(node)
 

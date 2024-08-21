@@ -29,7 +29,7 @@ def main(args=None):
     pos_y = 0
     pos_theta = 0
 
-    odom_publisher = node.create_publisher(nav_msgs.msg.Odometry, "/odom", 10)
+    odom_publisher = node.create_publisher(nav_msgs.msg.Odometry, "odom", 10)
     tf_broadcaster = tf2_ros.TransformBroadcaster(node)
 
     def cb(linear_vel, angular_vel, dt):
@@ -80,7 +80,7 @@ def main(args=None):
 
     def cb(msg: geometry_msgs.msg.Twist):
         base_controller.set_vel(msg.linear.x, msg.angular.z)
-    node.create_subscription(geometry_msgs.msg.Twist, '/cmd_vel', cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(geometry_msgs.msg.Twist, 'cmd_vel', cb, rclpy.qos.qos_profile_sensor_data)
 
     rclpy.spin(node)
 

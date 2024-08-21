@@ -12,11 +12,11 @@ def main(args=None):
 
     node = rclpy.node.Node('moveit_relay_node')
 
-    arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "/arm_joint_command", 10)
+    arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "arm/joint_command", 10)
 
-    gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "/gripper_joint_command", 10)
+    gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "arm/gripper_joint_command", 10)
 
-    lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "/lift_joint_command", 10)
+    lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "lift/joint_command", 10)
     
     joint_pos = {
         "joint_r1": 0, 

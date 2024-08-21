@@ -21,25 +21,47 @@ def main(args=None):
     logger = node.get_logger()
     
     node.declare_parameter('device', '/dev/tty_puppet_right')
+    node.declare_parameter('side', 'right')
 
     device = node.get_parameter('device').value
+    side = node.get_parameter('side').value
+    
+    if side not in ['left', 'right']:
+        raise Exception("Unknown side")
+    
+    side_config = {
+        "left": {
+            "joint_names": [
+                "joint_l2", 
+                "joint_l3", 
+                "joint_l4", 
+                "joint_l5", 
+                "joint_l6", 
+                "joint_l7l", 
+                "joint_l7r" 
+            ],
+        },
+        "right": {
+            "joint_names": [
+                "joint_r2", 
+                "joint_r3", 
+                "joint_r4", 
+                "joint_r5", 
+                "joint_r6", 
+                "joint_r7l", 
+                "joint_r7r" 
+            ],
+        },
+    }
 
     arm_controller = ArmController(device)
 
-    joint_state_publisher = node.create_publisher(sensor_msgs.msg.JointState, "/joint_states", 10)
+    joint_state_publisher = node.create_publisher(sensor_msgs.msg.JointState, "joint_states", 10)
     def cb(position, velocity, effort, this_time):
         msg = sensor_msgs.msg.JointState()
         msg.header.stamp = node.get_clock().now().to_msg()
                 
-        msg.name = [
-            "joint_r2", 
-            "joint_r3", 
-            "joint_r4", 
-            "joint_r5", 
-            "joint_r6", 
-            "joint_r7l", 
-            "joint_r7r" 
-        ]
+        msg.name = side_config[side]["joint_names"]
         msg.position = [ 
             float(position[0]), 
             float(position[1]), 
@@ -71,7 +93,7 @@ def main(args=None):
         joint_state_publisher.publish(msg)
     arm_controller.state_cb = cb
 
-    pong_publisher = node.create_publisher(std_msgs.msg.UInt16MultiArray, '/pong', 10)
+    pong_publisher = node.create_publisher(std_msgs.msg.UInt16MultiArray, 'pong', 10)
     def cb(data):
         logger.info(f'pong: {data}')
         pong_publisher.publish(std_msgs.msg.UInt16MultiArray(
@@ -87,26 +109,26 @@ def main(args=None):
         cmd = [*msg.cmd[:5], last_cmd[5]]
         arm_controller.set_pos(cmd)
         last_cmd = cmd
-    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, '/arm_joint_command', cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, 'joint_command', cb, rclpy.qos.qos_profile_sensor_data)
     
     def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
         nonlocal last_cmd
         cmd = [*last_cmd[:5], msg.cmd[0]]
         arm_controller.set_pos(cmd)
         last_cmd = cmd
-    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, '/gripper_joint_command', cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, 'gripper_joint_command', cb, rclpy.qos.qos_profile_sensor_data)
     
     def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
         cmd_data = [round(x) for x in msg.position]
         logger.info(f'torque cmd: {cmd_data}')
         arm_controller.write(struct.pack('>BBHHHHHHH', arm_controller.COMM_HEAD, arm_controller.COMM_TYPE_TORQUE, *cmd_data))
-    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, '/torque_command', cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, 'torque_command', cb, rclpy.qos.qos_profile_sensor_data)
     
     def cb(msg: std_msgs.msg.UInt16MultiArray):
         cmd_data = msg.data
         logger.info(f'ping cmd: {cmd_data}')
         arm_controller.write(struct.pack('>BBHHHHHHH', arm_controller.COMM_HEAD, arm_controller.COMM_TYPE_PING, *cmd_data))
-    node.create_subscription(std_msgs.msg.UInt16MultiArray, '/ping', cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(std_msgs.msg.UInt16MultiArray, 'ping', cb, rclpy.qos.qos_profile_sensor_data)
 
     def cb(
         request: astra_controller_interfaces.srv.ReadConfig.Request, 
