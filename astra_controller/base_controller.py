@@ -103,7 +103,7 @@ class BaseController:
         drv.set_controller_mode("VELOCITY_CONTROL", "VEL_RAMP")
 
         # Set gains
-        drv.set_vel_gains(0.3, 0.3)
+        drv.set_vel_gains(0.4, 0.4)
 
         # set control mode
         drv.set_axis_state_no_wait("CLOSED_LOOP_CONTROL")
