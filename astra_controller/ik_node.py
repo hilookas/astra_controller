@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 import rclpy
 import rclpy.node
@@ -77,6 +78,8 @@ def main(args=None):
             cmd=list(theta_list[:1])
         )
         lift_joint_command_publisher.publish(msg)
+        
+    last_theta_list = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
     def set_ee_pose_matrix(
         T_sd: np.ndarray,
@@ -90,28 +93,47 @@ def main(args=None):
         :return: `True` if a valid solution was found; `False` otherwise
         """
         logger.debug(f'Setting ee_pose to matrix=\n{T_sd}')
-
-        theta_list, success = mr.IKinSpace(
-            Slist=Slist,
-            M=M,
-            T=T_sd,
-            thetalist0=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            eomg=0.001,
-            ev=0.001,
-        )
         
-        if not success:
-            logger.warn('Failed guess. Maybe EEF is out of range. No valid pose could be found. Will not execute')
-            return theta_list, False
-
-        # Check to make sure a solution was found and that no joint limits were violated
-        if not ((joint_limit_lower <= theta_list) & (theta_list <= joint_limit_upper)).all():
-            logger.warn('Guess over range. No valid pose could be found. Will not execute')
-            return theta_list, False
+        nonlocal last_theta_list
         
-        pub_theta(theta_list)
+        for initial_guess in [
+            last_theta_list,
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        ]:
+            theta_list, success = mr.IKinSpace(
+                Slist=Slist,
+                M=M,
+                T=T_sd,
+                thetalist0=initial_guess,
+                eomg=0.001,
+                ev=0.001,
+            )
+            
+            if not success:
+                logger.warn('Failed guess. Maybe EEF is out of range.')
+                continue
+            
+            before_clip = theta_list
+            if not ((joint_limit_lower <= theta_list) & (theta_list <= joint_limit_upper)).all():
+                for i in [1, 2, 3, 4, 5]:
+                    theta_list[i] = math.fmod(math.fmod(theta_list[i] + math.pi, 2*math.pi) + 2*math.pi, 2*math.pi) - math.pi
 
-        return theta_list, True
+            # Check to make sure a solution was found and that no joint limits were violated
+            if not ((joint_limit_lower <= theta_list) & (theta_list <= joint_limit_upper)).all():
+                logger.warn('Guess over range.')
+                logger.warn('min: ' + str(joint_limit_lower))
+                logger.warn('before clip' + str(before_clip))
+                logger.warn('after clip' + str(theta_list))
+                logger.warn('max: ' + str(joint_limit_upper))
+                continue
+            
+            pub_theta(theta_list)
+
+            last_theta_list = theta_list
+            return theta_list, True
+        
+        logger.warn('No valid pose could be found. Will not execute')
+        return theta_list, False
 
     def cb(msg: geometry_msgs.msg.PoseStamped):
         pq = np.array([
