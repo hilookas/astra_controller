@@ -1,4 +1,6 @@
-from pprint import pprint
+import asyncio
+import threading
+import time
 import rclpy
 import rclpy.node
 import rclpy.publisher
@@ -7,18 +9,40 @@ import geometry_msgs.msg
 from astra_teleop_web.webserver import WebServer
 from pytransform3d import transformations as pt
 import numpy as np
-import threading
 
 import PIL.Image
 import io
 import sensor_msgs.msg
 
+import rclpy
+import rclpy.node
+import rclpy.qos
+
+import geometry_msgs.msg
+import astra_controller_interfaces.msg
+
+import numpy as np
+from pytransform3d import transformations as pt
+
+from tf2_ros.transform_listener import TransformListener
+from tf2_ros.buffer import Buffer
+
+np.set_printoptions(precision=4, suppress=True)
+
 def main(args=None):
     rclpy.init(args=args)
 
-    node = rclpy.node.Node("teleop_node")
+    node = rclpy.node.Node("teleop_web_node")
+
+    logger = node.get_logger()
 
     webserver = WebServer()
+    
+    tf_buffer = Buffer()
+    tf_listener = TransformListener(tf_buffer, node)
+    
+    arms_enabled = False
+    lift_distance = 0.8
     
     def pub_T(pub: rclpy.publisher.Publisher, T, frame_id='base_link'):
         msg = geometry_msgs.msg.PoseStamped()
@@ -36,37 +60,59 @@ def main(args=None):
 
     def get_cb(side):
         pub_cam = node.create_publisher(geometry_msgs.msg.PoseStamped, f"{side}/cam_pose", 10)
-        pub = node.create_publisher(geometry_msgs.msg.PoseStamped, f"{side}/goal_pose", 10)
+        pub_goal = node.create_publisher(geometry_msgs.msg.PoseStamped, f"{side}/goal_pose", 10)
+        pub_goal_inactive = node.create_publisher(geometry_msgs.msg.PoseStamped, f"{side}/goal_pose_inactive", 10)
         # pub1 = node.create_publisher(geometry_msgs.msg.PoseStamped, f"{side}/goal_pose1", 10)
         # pub2 = node.create_publisher(geometry_msgs.msg.PoseStamped, f"{side}/goal_pose2", 10)
+        
+        if side == "left":
+            Tscam = np.array([
+                [0, 0, -1, 1.0], 
+                [1, 0, 0, 0.5], 
+                [0, -1, 0, lift_distance], 
+                [0, 0, 0, 1], 
+            ])
+        elif side == "right":
+            Tscam = np.array([
+                [0, 0, -1, 1.0], 
+                [1, 0, 0, -0.5], 
+                [0, -1, 0, lift_distance], 
+                [0, 0, 0, 1], 
+            ])
 
         Tcamgoal_last = None
+        
+        def reset_Tscam():
+            nonlocal Tscam
+            Tsgoal_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_ree' if side == "right" else 'link_lee', rclpy.time.Time())
+            Tsgoal = pt.transform_from_pq(np.array([
+                Tsgoal_msg.transform.translation.x, 
+                Tsgoal_msg.transform.translation.y, 
+                Tsgoal_msg.transform.translation.z, 
+                Tsgoal_msg.transform.rotation.w, 
+                Tsgoal_msg.transform.rotation.x, 
+                Tsgoal_msg.transform.rotation.y, 
+                Tsgoal_msg.transform.rotation.z, 
+            ]))
+
+            if Tcamgoal_last is None:
+                raise Exception("Connect your hand capture first!")
+            Tcamgoal = Tcamgoal_last
+            Tscam = Tsgoal @ np.linalg.inv(Tcamgoal)
+            logger.info(f"{side} Tscam reset")
+            logger.info(str(Tscam))
 
         def cb(
             Tcamgoal, 
             # Tcamgoal1, Tcamgoal2
         ):
             # 将摄像头坐标系从base link坐标系 移动+旋转到正确位置
-            if side == "left":
-                Tscam = np.array([
-                    [0, 0, -1, 1.0], 
-                    [1, 0, 0, 0.5], 
-                    [0, -1, 0, 0.5], 
-                    [0, 0, 0, 1], 
-                ])
-            elif side == "right":
-                Tscam = np.array([
-                    [0, 0, -1, 1.0], 
-                    [1, 0, 0, -0.5], 
-                    [0, -1, 0, 0.5], 
-                    [0, 0, 0, 1], 
-                ])
             pub_T(pub_cam, Tscam)
 
             nonlocal Tcamgoal_last
             if Tcamgoal_last is None:
                 Tcamgoal_last = Tcamgoal
-            low_pass_coff = 0.4
+            low_pass_coff = 0.1
             Tcamgoal = pt.transform_from_pq(pt.pq_slerp(
                 pt.pq_from_transform(Tcamgoal_last),
                 pt.pq_from_transform(Tcamgoal),
@@ -75,14 +121,38 @@ def main(args=None):
             Tcamgoal_last = Tcamgoal
             
             Tsgoal = Tscam @ Tcamgoal
-            pub_T(pub, Tsgoal)
-            
+            pub_T(pub_goal_inactive, Tsgoal)
             # pub_T(pub1, Tscam @ Tcamgoal1)
             # pub_T(pub2, Tscam @ Tcamgoal2)
-        return cb
+            if arms_enabled:
+                pub_T(pub_goal, Tsgoal)
+        
+        arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"{side}/arm/joint_command", 10)
+        lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"{side}/lift/joint_command", 10)
+        arm_gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"{side}/arm/gripper_joint_command", 10)
+        
+        async def reset_arms():        
+            for i in range(30):
+                arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+                    cmd=list([-0.785 if side == "right" else 0.785, 0.785 if side == "right" else -0.785, 0, 0, 0])
+                ))
+
+                lift_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+                    cmd=list([lift_distance])
+                ))
+
+                arm_gripper_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+                    cmd=list([GRIPPER_MAX])
+                ))
+                
+                await asyncio.sleep(0.1)
+        
+        def Tscam_update_lift_distance(lift_distance_change):
+            Tscam[2,3] += lift_distance_change
+        return cb, reset_Tscam, reset_arms, Tscam_update_lift_distance
     
-    webserver.right_hand_cb = get_cb("right")
-    webserver.left_hand_cb = get_cb("left")
+    webserver.right_hand_cb, reset_Tscam_right, reset_arms_right, Tscam_update_lift_distance_right = get_cb("right")
+    webserver.left_hand_cb, reset_Tscam_left, reset_arms_left, Tscam_update_lift_distance_left = get_cb("left")
     
     def get_cb(name):
         def cb(msg):
@@ -111,25 +181,79 @@ def main(args=None):
 
 
     cmd_vel_publisher = node.create_publisher(geometry_msgs.msg.Twist, 'cmd_vel', 10)
-        
+    left_gripper_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "left/arm/gripper_joint_command", 10)
+    right_gripper_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "right/arm/gripper_joint_command", 10)
+    
+    GRIPPER_MAX = 0.055
+    
+    last_t = None
     def cb(pedal_real_values):
+        nonlocal lift_distance, last_t
+
         non_sensetive_area = 0.1
         cliped_pedal_real_values = np.clip((np.array(pedal_real_values) - 0.5) / (0.5 - non_sensetive_area) * 0.5 + 0.5, 0, 1)
-        pedal_names = ["angular-neg", "angular-pos", "linear-neg", "linear-pos", "mode-select", "left-gripper", "right-gripper"]
-        values = dict(zip(pedal_names, cliped_pedal_real_values))
-        LINEAR_VEL_MAX = 1
-        ANGULAR_VEL_MAX = 1
-        linear_vel = (values["linear-pos"] - values["linear-neg"]) * LINEAR_VEL_MAX
-        angular_vel = -(values["angular-pos"] - values["angular-neg"]) * ANGULAR_VEL_MAX
-        
-        msg = geometry_msgs.msg.Twist()
+        pedal_names = ["angular-pos", "angular-neg", "linear-neg", "linear-pos", "useless-1", "useless-2", "useless-3"]
+        pedal_names_arms_enabled = ["lift-neg", "lift-pos", "left-gripper", "right-gripper", "useless-1", "useless-2", "useless-3"]
+        if arms_enabled:
+            values = dict(zip(pedal_names_arms_enabled, cliped_pedal_real_values))
 
-        msg.linear.x = linear_vel
-        msg.angular.z = angular_vel
+            LIFT_VEL_MAX = 0.5
+            lift_vel = (values["lift-pos"] - values["lift-neg"]) * LIFT_VEL_MAX
 
-        cmd_vel_publisher.publish(msg)
+            this_t = time.perf_counter()
+            if last_t is None:
+                last_t = this_t
+            lift_distance_change = (this_t - last_t) * lift_vel
+            LIFT_DISTANCE_MIN = 0.7
+            LIFT_DISTANCE_MAX = 1.2
+            if lift_distance + lift_distance_change < LIFT_DISTANCE_MIN or lift_distance + lift_distance_change > LIFT_DISTANCE_MAX:
+                logger.warn("lift over limit")
+            elif lift_distance_change:
+                Tscam_update_lift_distance_left(lift_distance_change)
+                Tscam_update_lift_distance_right(lift_distance_change)
+                lift_distance += lift_distance_change
+                logger.info(str(lift_distance))
+            last_t = this_t
+            
+            left_gripper_pos = (1 - values["left-gripper"]) * GRIPPER_MAX
+            right_gripper_pos = (1 - values["right-gripper"]) * GRIPPER_MAX
+            
+            left_gripper_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(cmd=[left_gripper_pos]))
+            right_gripper_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(cmd=[right_gripper_pos]))
+        else:
+            values = dict(zip(pedal_names, cliped_pedal_real_values))
+
+            LINEAR_VEL_MAX = 1
+            ANGULAR_VEL_MAX = 1
+            linear_vel = (values["linear-pos"] - values["linear-neg"]) * LINEAR_VEL_MAX
+            angular_vel = (values["angular-pos"] - values["angular-neg"]) * ANGULAR_VEL_MAX * (-1 if linear_vel < 0 else 1)
+            
+            msg = geometry_msgs.msg.Twist()
+
+            msg.linear.x = linear_vel
+            msg.angular.z = angular_vel
+
+            cmd_vel_publisher.publish(msg)
+
+            last_t = None
         
     webserver.pedal_cb = cb
+        
+    def cb(control_type):
+        nonlocal arms_enabled
+        logger.info(control_type)
+        if control_type == "disable_arms":
+            arms_enabled = False
+        elif control_type == "enable_arms":
+            reset_Tscam_left()
+            reset_Tscam_right()
+            arms_enabled = True
+        elif control_type == "reset_arms":
+            arms_enabled = False
+            threading.Thread(target=asyncio.run, args=(reset_arms_left(),), daemon=True).start()
+            threading.Thread(target=asyncio.run, args=(reset_arms_right(),), daemon=True).start()
+        
+    webserver.control_cb = cb
 
     rclpy.spin(node)
 
