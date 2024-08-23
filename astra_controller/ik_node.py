@@ -15,7 +15,6 @@ import modern_robotics as mr
 import numpy as np
 from mr_urdf_loader import loadURDF
 from pytransform3d import transformations as pt
-import time
 
 import logging
 
@@ -135,17 +134,19 @@ def main(args=None):
         logger.warn('No valid pose could be found. Will not execute')
         return theta_list, False
 
-    def cb(msg: geometry_msgs.msg.PoseStamped):
-        pq = np.array([
-            msg.pose.position.x,
-            msg.pose.position.y,
-            msg.pose.position.z,
-            msg.pose.orientation.w,
-            msg.pose.orientation.x,
-            msg.pose.orientation.y,
-            msg.pose.orientation.z
+    def pq_from_ros_pose(msg: geometry_msgs.msg.Pose):
+        return np.array([
+            msg.position.x,
+            msg.position.y,
+            msg.position.z,
+            msg.orientation.w,
+            msg.orientation.x,
+            msg.orientation.y,
+            msg.orientation.z
         ])
-        set_ee_pose_matrix(pt.transform_from_pq(pq))
+
+    def cb(msg: geometry_msgs.msg.PoseStamped):
+        set_ee_pose_matrix(pt.transform_from_pq(pq_from_ros_pose(msg.pose)))
     node.create_subscription(geometry_msgs.msg.PoseStamped, "goal_pose", cb, rclpy.qos.qos_profile_sensor_data)
 
     rclpy.spin(node)

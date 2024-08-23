@@ -1,11 +1,11 @@
 import asyncio
+import json
 import threading
 import time
 import rclpy
 import rclpy.node
 import rclpy.publisher
 
-import geometry_msgs.msg
 from astra_teleop_web.webserver import WebServer
 from pytransform3d import transformations as pt
 import numpy as np
@@ -18,6 +18,7 @@ import rclpy
 import rclpy.node
 import rclpy.qos
 
+import std_msgs.msg
 import geometry_msgs.msg
 import astra_controller_interfaces.msg
 
@@ -41,7 +42,7 @@ def main(args=None):
     tf_buffer = Buffer()
     tf_listener = TransformListener(tf_buffer, node)
     
-    arms_enabled = False
+    arm_enabled = False
     lift_distance = 0.8
     
     def pub_T(pub: rclpy.publisher.Publisher, T, frame_id='base_link'):
@@ -96,7 +97,7 @@ def main(args=None):
             ]))
 
             if Tcamgoal_last is None:
-                raise Exception("Connect your hand capture first!")
+                raise Exception(f"Connect your {side} hand capture first!")
             Tcamgoal = Tcamgoal_last
             Tscam = Tsgoal @ np.linalg.inv(Tcamgoal)
             logger.info(f"{side} Tscam reset")
@@ -124,15 +125,15 @@ def main(args=None):
             pub_T(pub_goal_inactive, Tsgoal)
             # pub_T(pub1, Tscam @ Tcamgoal1)
             # pub_T(pub2, Tscam @ Tcamgoal2)
-            if arms_enabled:
+            if arm_enabled:
                 pub_T(pub_goal, Tsgoal)
         
         arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"{side}/arm/joint_command", 10)
         lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"{side}/lift/joint_command", 10)
         arm_gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"{side}/arm/gripper_joint_command", 10)
         
-        async def reset_arms():        
-            for i in range(30):
+        async def reset_arm():        
+            for i in range(10):
                 arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
                     cmd=list([-0.785 if side == "right" else 0.785, 0.785 if side == "right" else -0.785, 0, 0, 0])
                 ))
@@ -147,12 +148,17 @@ def main(args=None):
                 
                 await asyncio.sleep(0.1)
         
+        def set_gripper(gripper_open):
+            arm_gripper_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+                cmd=list([gripper_open])
+            ))
+        
         def Tscam_update_lift_distance(lift_distance_change):
             Tscam[2,3] += lift_distance_change
-        return cb, reset_Tscam, reset_arms, Tscam_update_lift_distance
+        return cb, reset_Tscam, reset_arm, Tscam_update_lift_distance, set_gripper
     
-    webserver.right_hand_cb, reset_Tscam_right, reset_arms_right, Tscam_update_lift_distance_right = get_cb("right")
-    webserver.left_hand_cb, reset_Tscam_left, reset_arms_left, Tscam_update_lift_distance_left = get_cb("left")
+    webserver.right_hand_cb, reset_Tscam_right, reset_arm_right, Tscam_update_lift_distance_right, set_gripper_right = get_cb("right")
+    webserver.left_hand_cb, reset_Tscam_left, reset_arm_left, Tscam_update_lift_distance_left, set_gripper_left = get_cb("left")
     
     def get_cb(name):
         def cb(msg):
@@ -181,8 +187,6 @@ def main(args=None):
 
 
     cmd_vel_publisher = node.create_publisher(geometry_msgs.msg.Twist, 'cmd_vel', 10)
-    left_gripper_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "left/arm/gripper_joint_command", 10)
-    right_gripper_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "right/arm/gripper_joint_command", 10)
     
     GRIPPER_MAX = 0.055
     
@@ -193,9 +197,9 @@ def main(args=None):
         non_sensetive_area = 0.1
         cliped_pedal_real_values = np.clip((np.array(pedal_real_values) - 0.5) / (0.5 - non_sensetive_area) * 0.5 + 0.5, 0, 1)
         pedal_names = ["angular-pos", "angular-neg", "linear-neg", "linear-pos", "useless-1", "useless-2", "useless-3"]
-        pedal_names_arms_enabled = ["lift-neg", "lift-pos", "left-gripper", "right-gripper", "useless-1", "useless-2", "useless-3"]
-        if arms_enabled:
-            values = dict(zip(pedal_names_arms_enabled, cliped_pedal_real_values))
+        pedal_names_arm_enabled = ["lift-neg", "lift-pos", "left-gripper", "right-gripper", "useless-1", "useless-2", "useless-3"]
+        if arm_enabled:
+            values = dict(zip(pedal_names_arm_enabled, cliped_pedal_real_values))
 
             LIFT_VEL_MAX = 0.5
             lift_vel = (values["lift-pos"] - values["lift-neg"]) * LIFT_VEL_MAX
@@ -218,8 +222,8 @@ def main(args=None):
             left_gripper_pos = (1 - values["left-gripper"]) * GRIPPER_MAX
             right_gripper_pos = (1 - values["right-gripper"]) * GRIPPER_MAX
             
-            left_gripper_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(cmd=[left_gripper_pos]))
-            right_gripper_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(cmd=[right_gripper_pos]))
+            set_gripper_right(right_gripper_pos)
+            set_gripper_left(left_gripper_pos)
         else:
             values = dict(zip(pedal_names, cliped_pedal_real_values))
 
@@ -238,20 +242,49 @@ def main(args=None):
             last_t = None
         
     webserver.pedal_cb = cb
+
+        
+    def disable_arm_teleop():
+        nonlocal arm_enabled
+        arm_enabled = False
+    
+    def enable_arm_teleop():
+        nonlocal arm_enabled
+        reset_Tscam_left()
+        reset_Tscam_right()
+        arm_enabled = True
+    
+    reset_publisher = node.create_publisher(std_msgs.msg.Bool, 'reset', 10)
+    done_publisher = node.create_publisher(std_msgs.msg.Bool, 'done', 10)
+    
+    def datachannel_log(message):
+        if webserver.datachannel is not None:
+            webserver.datachannel.send(json.dumps(message))
+    
+    async def reset_arm():
+        try: 
+            disable_arm_teleop()
+            await asyncio.gather(reset_arm_left(), reset_arm_right())
+            enable_arm_teleop()
+            reset_publisher.publish(std_msgs.msg.Bool(data=True))
+            datachannel_log("Reset")
+        except Exception as e:
+            err_msg = f"{type(e).__name__}: {e.args}"
+            datachannel_log(err_msg)
+            raise e
         
     def cb(control_type):
-        nonlocal arms_enabled
         logger.info(control_type)
-        if control_type == "disable_arms":
-            arms_enabled = False
-        elif control_type == "enable_arms":
-            reset_Tscam_left()
-            reset_Tscam_right()
-            arms_enabled = True
-        elif control_type == "reset_arms":
-            arms_enabled = False
-            threading.Thread(target=asyncio.run, args=(reset_arms_left(),), daemon=True).start()
-            threading.Thread(target=asyncio.run, args=(reset_arms_right(),), daemon=True).start()
+        datachannel_log(f"Cmd: {control_type}")
+        if control_type == "disable_arm_teleop":
+            disable_arm_teleop()
+        elif control_type == "enable_arm_teleop":
+            enable_arm_teleop()
+        elif control_type == "reset":
+            threading.Thread(target=asyncio.run, args=(reset_arm(),), daemon=True).start()
+        elif control_type == "done":
+            done_publisher.publish(std_msgs.msg.Bool(data=True))
+            datachannel_log("Done")
         
     webserver.control_cb = cb
 
