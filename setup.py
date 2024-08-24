@@ -1,10 +1,12 @@
 from setuptools import find_packages, setup
 import os
 from glob import glob
+# from Cython.Build import cythonize
 
 package_name = 'astra_controller'
 
 setup(
+    # ext_modules=cythonize(package_name + "/*.py", compiler_directives={'language_level' : "3"}),
     name=package_name,
     version='0.0.0',
     packages=find_packages(exclude=['test']),
@@ -16,7 +18,10 @@ setup(
         (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*launch.[pxy][yma]*'))),
         (os.path.join('share', package_name, 'config'), glob(os.path.join('config', '*'))),
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools', 
+        # 'Cython', 
+    ],
     zip_safe=True,
     maintainer='rosdev',
     maintainer_email='i@18kas.com',
