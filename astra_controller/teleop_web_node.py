@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import threading
 import time
 import rclpy
@@ -30,6 +31,17 @@ from tf2_ros.buffer import Buffer
 
 np.set_printoptions(precision=4, suppress=True)
 
+def pq_from_ros_transform(msg: geometry_msgs.msg.Transform):
+    return [
+        msg.translation.x,
+        msg.translation.y,
+        msg.translation.z,
+        msg.rotation.w,
+        msg.rotation.x,
+        msg.rotation.y,
+        msg.rotation.z
+    ]
+
 def main(args=None):
     rclpy.init(args=args)
 
@@ -45,6 +57,8 @@ def main(args=None):
     arm_enabled = False
     lift_distance = 0.8
     
+    GRIPPER_MAX = 0.055
+    
     def pub_T(pub: rclpy.publisher.Publisher, T, frame_id='base_link'):
         msg = geometry_msgs.msg.PoseStamped()
         msg.header.frame_id = frame_id
@@ -58,6 +72,15 @@ def main(args=None):
         msg.pose.orientation.y = pq[5]
         msg.pose.orientation.z = pq[6]
         pub.publish(msg)
+    
+    joint_states = {
+        "joint_l1": 0.0, "joint_l2": 0.0, "joint_l3": 0.0, "joint_l4": 0.0, "joint_l5": 0.0, "joint_l6": 0.0, "joint_l7r": 0.0,
+        "joint_r1": 0.0, "joint_r2": 0.0, "joint_r3": 0.0, "joint_r4": 0.0, "joint_r5": 0.0, "joint_r6": 0.0, "joint_r7r": 0.0,
+    }
+
+    def cb(msg: sensor_msgs.msg.JointState):
+        joint_states.update(dict(zip(msg.name, msg.position)))
+    node.create_subscription(sensor_msgs.msg.JointState, "joint_states", cb, rclpy.qos.qos_profile_sensor_data)
 
     def get_cb(side):
         pub_cam = node.create_publisher(geometry_msgs.msg.PoseStamped, f"{side}/cam_pose", 10)
@@ -86,15 +109,7 @@ def main(args=None):
         def reset_Tscam():
             nonlocal Tscam
             Tsgoal_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_ree' if side == "right" else 'link_lee', rclpy.time.Time())
-            Tsgoal = pt.transform_from_pq(np.array([
-                Tsgoal_msg.transform.translation.x, 
-                Tsgoal_msg.transform.translation.y, 
-                Tsgoal_msg.transform.translation.z, 
-                Tsgoal_msg.transform.rotation.w, 
-                Tsgoal_msg.transform.rotation.x, 
-                Tsgoal_msg.transform.rotation.y, 
-                Tsgoal_msg.transform.rotation.z, 
-            ]))
+            Tsgoal = pt.transform_from_pq(np.array(pq_from_ros_transform(Tsgoal_msg.transform)))
 
             if Tcamgoal_last is None:
                 raise Exception(f"Connect your {side} hand capture first!")
@@ -131,21 +146,41 @@ def main(args=None):
         arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"{side}/arm/joint_command", 10)
         lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"{side}/lift/joint_command", 10)
         arm_gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"{side}/arm/gripper_joint_command", 10)
-        
-        async def reset_arm():        
-            for i in range(10):
-                arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
-                    cmd=list([-0.785 if side == "right" else 0.785, 0.785 if side == "right" else -0.785, 0, 0, 0])
-                ))
 
-                lift_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
-                    cmd=list([lift_distance])
-                ))
+        def command_arm(command_joint_states):
+            arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+                cmd=list(command_joint_states[1:6])
+            ))
 
-                arm_gripper_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
-                    cmd=list([GRIPPER_MAX])
-                ))
+            lift_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+                cmd=list(command_joint_states[:1])
+            ))
+
+            arm_gripper_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+                cmd=list(command_joint_states[6:7])
+            ))
                 
+        async def reset_arm():
+            if side == "left":
+                joint_names = ["joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6", "joint_l7r", ]
+                initial_joint_states = [lift_distance, 0.785, -0.785, 0, 0, 0, GRIPPER_MAX]
+            else:
+                joint_names = ["joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6", "joint_r7r", ]
+                initial_joint_states = [lift_distance, -0.785, 0.785, 0, 0, 0, GRIPPER_MAX]
+
+            while True:
+                current_joint_states = [joint_states[key] for key in joint_names]
+                
+                dist = np.linalg.norm(np.array(current_joint_states) - initial_joint_states)
+                
+                if dist < 0.2:
+                    break
+                
+                command_arm(initial_joint_states)
+                await asyncio.sleep(0.1)
+              
+            for i in range(5):
+                command_arm(initial_joint_states)
                 await asyncio.sleep(0.1)
         
         def set_gripper(gripper_open):
@@ -187,8 +222,6 @@ def main(args=None):
 
 
     cmd_vel_publisher = node.create_publisher(geometry_msgs.msg.Twist, 'cmd_vel', 10)
-    
-    GRIPPER_MAX = 0.055
     
     last_t = None
     def cb(pedal_real_values):

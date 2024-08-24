@@ -215,14 +215,14 @@ def generate_launch_description():
         )
     )
 
-    ld.add_action(
-        Node(
-            package="rviz2",
-            executable="rviz2",
-            respawn=False,
-            arguments=["-d", LaunchConfiguration("rviz_config")],
-            output={'both': 'log'},
-        )
-    )
+    # ld.add_action(
+    #     Node(
+    #         package="rviz2",
+    #         executable="rviz2",
+    #         respawn=False,
+    #         arguments=["-d", LaunchConfiguration("rviz_config")],
+    #         output={'both': 'log'},
+    #     )
+    # )
 
     return ld

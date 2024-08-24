@@ -22,6 +22,17 @@ logger = logging.getLogger(__name__)
 
 np.set_printoptions(precision=4, suppress=True)
 
+def pq_from_ros_pose(msg: geometry_msgs.msg.Pose):
+    return [
+        msg.position.x,
+        msg.position.y,
+        msg.position.z,
+        msg.orientation.w,
+        msg.orientation.x,
+        msg.orientation.y,
+        msg.orientation.z
+    ]
+
 def main(args=None):
     rclpy.init(args=args)
 
@@ -134,19 +145,8 @@ def main(args=None):
         logger.warn('No valid pose could be found. Will not execute')
         return theta_list, False
 
-    def pq_from_ros_pose(msg: geometry_msgs.msg.Pose):
-        return np.array([
-            msg.position.x,
-            msg.position.y,
-            msg.position.z,
-            msg.orientation.w,
-            msg.orientation.x,
-            msg.orientation.y,
-            msg.orientation.z
-        ])
-
     def cb(msg: geometry_msgs.msg.PoseStamped):
-        set_ee_pose_matrix(pt.transform_from_pq(pq_from_ros_pose(msg.pose)))
+        set_ee_pose_matrix(pt.transform_from_pq(np.array(pq_from_ros_pose(msg.pose))))
     node.create_subscription(geometry_msgs.msg.PoseStamped, "goal_pose", cb, rclpy.qos.qos_profile_sensor_data)
 
     rclpy.spin(node)
