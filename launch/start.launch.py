@@ -36,9 +36,9 @@ def generate_launch_description():
             namespace='cam_head',
             parameters=[{
                 'video_device': '/dev/video_head',
-                'pixel_format': 'raw_mjpeg', # mjpeg2rgb if you use rviz
-                'image_width': 1920,
-                'image_height': 1080,
+                'pixel_format': 'mjpeg2rgb', # mjpeg2rgb to imdecode with usb_cam (usb_cam use ffmpeg decode which is more faster and less cpu usage)
+                'image_width': 1280,
+                'image_height': 720,
                 'framerate': 30.0,
             }],
             output={'both': 'log'},
@@ -50,7 +50,7 @@ def generate_launch_description():
             namespace='left/cam_wrist',
             parameters=[{
                 'video_device': '/dev/video_wrist_left',
-                'pixel_format': 'raw_mjpeg',
+                'pixel_format': 'mjpeg2rgb',
                 'image_width': 640,
                 'image_height': 360,
                 'framerate': 30.0,
@@ -64,7 +64,7 @@ def generate_launch_description():
             namespace='right/cam_wrist',
             parameters=[{
                 'video_device': '/dev/video_wrist_right',
-                'pixel_format': 'raw_mjpeg',
+                'pixel_format': 'mjpeg2rgb',
                 'image_width': 640,
                 'image_height': 360,
                 'framerate': 30.0,

@@ -1,6 +1,5 @@
 import asyncio
 import json
-import math
 import threading
 import time
 import rclpy
@@ -11,8 +10,6 @@ from astra_teleop_web.webserver import WebServer
 from pytransform3d import transformations as pt
 import numpy as np
 
-import PIL.Image
-import io
 import sensor_msgs.msg
 
 import rclpy
@@ -196,25 +193,28 @@ def main(args=None):
     webserver.left_hand_cb, reset_Tscam_left, reset_arm_left, Tscam_update_lift_distance_left, set_gripper_left = get_cb("left")
     
     def get_cb(name):
-        def cb(msg):
-            image = PIL.Image.open(io.BytesIO(msg.data))
+        def cb(msg: sensor_msgs.msg.Image):
+            assert msg.encoding == "rgb8"
+            image = np.asarray(msg.data).reshape(msg.height, msg.width, 3)
             if name == "head":
-                image = image.resize((1280, 720))
+                assert msg.height == 720 and msg.width == 1280
+                # image = cv2.resize(image, (1280, 720))
             else:
-                image = image.resize((640, 360))
+                assert msg.height == 360 and msg.width == 640
+                # image = cv2.resize(image, (640, 360))
             try:
                 getattr(webserver, f"track_{name}").feed(image)
             except:
                 pass
         return cb
     node.create_subscription(
-        sensor_msgs.msg.CompressedImage, 'cam_head/image_raw/compressed', get_cb("head"), rclpy.qos.qos_profile_sensor_data 
+        sensor_msgs.msg.Image, 'cam_head/image_raw', get_cb("head"), rclpy.qos.qos_profile_sensor_data 
     )
     node.create_subscription(
-        sensor_msgs.msg.CompressedImage, 'left/cam_wrist/image_raw/compressed', get_cb("wrist_left"), rclpy.qos.qos_profile_sensor_data 
+        sensor_msgs.msg.Image, 'left/cam_wrist/image_raw', get_cb("wrist_left"), rclpy.qos.qos_profile_sensor_data 
     )
     node.create_subscription(
-        sensor_msgs.msg.CompressedImage, 'right/cam_wrist/image_raw/compressed', get_cb("wrist_right"), rclpy.qos.qos_profile_sensor_data 
+        sensor_msgs.msg.Image, 'right/cam_wrist/image_raw', get_cb("wrist_right"), rclpy.qos.qos_profile_sensor_data 
     )
     # rclpy.qos.qos_profile_sensor_data: best effort reliability and a smaller queue size
     # see: https://docs.ros.org/en/rolling/Concepts/Intermediate/About-Quality-of-Service-Settings.html

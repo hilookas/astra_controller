@@ -8,6 +8,7 @@
   <license>TODO: License declaration</license>
   
   <depend>astra_controller_interfaces</depend>
+  <depend>simple_cap</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
