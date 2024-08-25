@@ -12,8 +12,6 @@ import numpy as np
 import time
 import geometry_msgs.msg
 import nav_msgs.msg
-import PIL.Image
-import io
 
 from tf2_ros.transform_listener import TransformListener
 from tf2_ros.buffer import Buffer
@@ -72,17 +70,20 @@ class AstraController:
         )
         
         def get_cb(name):
-            def cb(msg: sensor_msgs.msg.CompressedImage):
-                image = PIL.Image.open(io.BytesIO(msg.data))
+            def cb(msg: sensor_msgs.msg.Image):
+                assert msg.encoding == "rgb8"
+                image = np.asarray(msg.data).reshape(msg.height, msg.width, 3) # shape: [720, 1280, 3]
                 if name == "head":
-                    image = image.resize((1280, 720))
+                    assert msg.height == 720 and msg.width == 1280
+                    # image = cv2.resize(image, (1280, 720))
                 else:
-                    image = image.resize((640, 360))
+                    assert msg.height == 360 and msg.width == 640
+                    # image = cv2.resize(image, (640, 360))
                 self.images[name] = image
             return cb
-        node.create_subscription(sensor_msgs.msg.CompressedImage, "cam_head/image_raw/compressed", get_cb("head"), rclpy.qos.qos_profile_sensor_data)
-        node.create_subscription(sensor_msgs.msg.CompressedImage, "left/cam_wrist/image_raw/compressed", get_cb("wrist_left"), rclpy.qos.qos_profile_sensor_data)
-        node.create_subscription(sensor_msgs.msg.CompressedImage, "right/cam_wrist/image_raw/compressed", get_cb("wrist_right"), rclpy.qos.qos_profile_sensor_data)
+        node.create_subscription(sensor_msgs.msg.Image, "cam_head/image_raw", get_cb("head"), rclpy.qos.qos_profile_sensor_data)
+        node.create_subscription(sensor_msgs.msg.Image, "left/cam_wrist/image_raw", get_cb("wrist_left"), rclpy.qos.qos_profile_sensor_data)
+        node.create_subscription(sensor_msgs.msg.Image, "right/cam_wrist/image_raw", get_cb("wrist_right"), rclpy.qos.qos_profile_sensor_data)
 
         tf_buffer = Buffer()
         TransformListener(tf_buffer, node)
@@ -103,8 +104,14 @@ class AstraController:
                 pass
             except tf2.ExtrapolationException:
                 pass
-            
         node.create_subscription(sensor_msgs.msg.JointState, "joint_states", cb, rclpy.qos.qos_profile_sensor_data)
+        
+        def cb(msg: nav_msgs.msg.Odometry):
+            self.joint_states["twist_linear"] = msg.twist.twist.linear.x
+            self.joint_states["twist_angular"] = msg.twist.twist.angular.z
+            
+            self.joint_states["odom"] = pq_from_ros_pose(msg.pose.pose)
+        node.create_subscription(nav_msgs.msg.Odometry, "odom", cb, rclpy.qos.qos_profile_sensor_data)
         
         def get_cb(names):
             def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
@@ -123,18 +130,21 @@ class AstraController:
             return cb
         node.create_subscription(geometry_msgs.msg.PoseStamped, "left/goal_pose", get_cb("eef_l"), rclpy.qos.qos_profile_sensor_data)
         node.create_subscription(geometry_msgs.msg.PoseStamped, "right/goal_pose", get_cb("eef_r"), rclpy.qos.qos_profile_sensor_data)
-        
-        def cb(msg: nav_msgs.msg.Odometry):
-            self.joint_states["twist_linear"] = msg.twist.twist.linear.x
-            self.joint_states["twist_angular"] = msg.twist.twist.angular.z
-            
-            self.joint_states["odom"] = pq_from_ros_pose(msg.pose.pose)
-        node.create_subscription(nav_msgs.msg.Odometry, "odom", cb, rclpy.qos.qos_profile_sensor_data)
 
         def cb(msg: geometry_msgs.msg.Twist):
             self.joint_commands["twist_linear"] = msg.linear.x
             self.joint_commands["twist_angular"] = msg.angular.z
         node.create_subscription(geometry_msgs.msg.Twist, "cmd_vel", cb, rclpy.qos.qos_profile_sensor_data)
+        
+        self.left_arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"left/arm/joint_command", 10)
+        self.left_lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"left/lift/joint_command", 10)
+        self.left_arm_gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"left/arm/gripper_joint_command", 10)
+        
+        self.right_arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"right/arm/joint_command", 10)
+        self.right_lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"right/lift/joint_command", 10)
+        self.right_arm_gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"right/arm/gripper_joint_command", 10)
+        
+        self.cmd_vel_publisher = node.create_publisher(geometry_msgs.msg.Twist, 'cmd_vel', 10)
         
         self.t = threading.Thread(target=rclpy.spin, args=(self.node,), daemon=True).start()
     
@@ -143,9 +153,9 @@ class AstraController:
         self.done = False
 
         self.images = {
-            "head": PIL.Image.new('RGB', (1280, 720)),
-            "wrist_left": PIL.Image.new('RGB', (640, 360)),
-            "wrist_right": PIL.Image.new('RGB', (640, 360))
+            "head": np.zeros((720, 1280, 3), np.uint8),
+            "wrist_left": np.zeros((720, 1280, 3), np.uint8),
+            "wrist_right": np.zeros((720, 1280, 3), np.uint8)
         }
         
         self.joint_states = {
@@ -169,79 +179,105 @@ class AstraController:
             print("Waiting for reset")
         self.reset_buf()
         
-    def connect(self):
-        self.wait_for_reset()
-            
+    def connect(self):            
         print("connected")
-        # TODO check ready state
         
     def disconnect(self):
         print("disconnect")
         
     def read_leader_present_position(self):
-        return [
-            self.joint_commands[key] for key in [
-                "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
-                "joint_l7r",
-                "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
-                "joint_r7r",
-                "twist_linear", "twist_angular", 
-            ]
-        ], [
-            self.joint_commands[key] for key in [
-                "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
-            ]
-        ], [
-            self.joint_commands[key] for key in [
-                "joint_l7r",
-            ]
-        ], [
-            self.joint_commands[key] for key in [
-                "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
-            ]
-        ], [
-            self.joint_commands[key] for key in [
-                "joint_r7r",
-            ]
-        ], [
-            self.joint_commands[key] for key in [
-                "twist_linear", "twist_angular", 
-            ]
-        ], self.joint_commands["eef_l"], self.joint_commands["eef_r"]
+        return [self.joint_commands[key] for key in [
+            "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
+            "joint_l7r",
+            "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
+            "joint_r7r",
+            "twist_linear", "twist_angular", 
+        ]], [self.joint_commands[key] for key in [
+            "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
+        ]], [self.joint_commands[key] for key in [
+            "joint_l7r",
+        ]], [self.joint_commands[key] for key in [
+            "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
+        ]], [self.joint_commands[key] for key in [
+            "joint_r7r",
+        ]], [self.joint_commands[key] for key in [
+            "twist_linear", "twist_angular", 
+        ]], self.joint_commands["eef_l"], self.joint_commands["eef_r"]
     
     def read_present_position(self):
-        return [
-            self.joint_states[key] for key in [
-                "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
-                "joint_l7r",
-                "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
-                "joint_r7r",
-                "twist_linear", "twist_angular", 
-            ]
-        ], [
-            self.joint_states[key] for key in [
-                "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
-            ]
-        ], [
-            self.joint_states[key] for key in [
-                "joint_l7r",
-            ]
-        ], [
-            self.joint_states[key] for key in [
-                "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
-            ]
-        ], [
-            self.joint_states[key] for key in [
-                "joint_r7r",
-            ]
-        ], [
-            self.joint_states[key] for key in [
-                "twist_linear", "twist_angular", 
-            ]
-        ], self.joint_commands["eef_l"], self.joint_commands["eef_r"], self.joint_states["odom"]
+        return [self.joint_states[key] for key in [
+            "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
+            "joint_l7r",
+            "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
+            "joint_r7r",
+            "twist_linear", "twist_angular", 
+        ]], [self.joint_states[key] for key in [
+            "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
+        ]], [self.joint_states[key] for key in [
+            "joint_l7r",
+        ]], [self.joint_states[key] for key in [
+            "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
+        ]], [self.joint_states[key] for key in [
+            "joint_r7r",
+        ]], [self.joint_states[key] for key in [
+            "twist_linear", "twist_angular", 
+        ]], self.joint_commands["eef_l"], self.joint_commands["eef_r"], self.joint_states["odom"]
         
-    def write_goal_position(self, goal_pos):
-        print("write", goal_pos)
+    def write_goal_position(self, goal_pos: list[float]): # TODO support IK mode
+        joint_commands = {}
+        joint_commands.update(dict(zip([
+            "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
+            "joint_l7r",
+            "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
+            "joint_r7r",
+            "twist_linear", "twist_angular", 
+        ], goal_pos)))
+        
+        self.left_arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+            cmd=[joint_commands[key] for key in [
+                "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
+            ]]
+        ))
+
+        self.left_lift_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+            cmd=[joint_commands[key] for key in [
+                "joint_l1"
+            ]]
+        ))
+
+        self.left_arm_gripper_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+            cmd=[joint_commands[key] for key in [
+                "joint_l7r",
+            ]]
+        ))
+        
+
+        self.right_arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+            cmd=[joint_commands[key] for key in [
+                "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
+            ]]
+        ))
+        
+        print(joint_commands["joint_r1"])
+
+        self.right_lift_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+            cmd=[joint_commands[key] for key in [
+                "joint_r1"
+            ]]
+        ))
+
+        self.right_arm_gripper_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
+            cmd=[joint_commands[key] for key in [
+                "joint_r7r",
+            ]]
+        ))
+        
+        
+        msg = geometry_msgs.msg.Twist()
+        msg.linear.x = joint_commands["twist_linear"]
+        msg.angular.z = joint_commands["twist_angular"]
+        self.cmd_vel_publisher.publish(msg)
+
         pass
         
     def read_cameras(self):
