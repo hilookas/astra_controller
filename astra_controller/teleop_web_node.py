@@ -229,8 +229,8 @@ def main(args=None):
 
         non_sensetive_area = 0.1
         cliped_pedal_real_values = np.clip((np.array(pedal_real_values) - 0.5) / (0.5 - non_sensetive_area) * 0.5 + 0.5, 0, 1)
-        pedal_names = ["angular-pos", "angular-neg", "linear-neg", "linear-pos", "useless-1", "useless-2", "useless-3"]
-        pedal_names_arm_enabled = ["left-gripper", "lift-neg", "lift-pos", "right-gripper", "useless-1", "useless-2", "useless-3"]
+        pedal_names = ["angular-pos", "angular-neg", "linear-neg", "linear-pos"]
+        pedal_names_arm_enabled = ["left-gripper", "lift-neg", "lift-pos", "right-gripper"]
         if arm_enabled:
             values = dict(zip(pedal_names_arm_enabled, cliped_pedal_real_values))
 

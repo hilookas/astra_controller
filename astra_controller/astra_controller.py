@@ -174,9 +174,9 @@ class AstraController:
         }
     
     def wait_for_reset(self):
+        print("Waiting for reset")
         while not self.reset:
             time.sleep(0.5)
-            print("Waiting for reset")
         self.reset_buf()
         
     def connect(self):            
@@ -257,8 +257,6 @@ class AstraController:
                 "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
             ]]
         ))
-        
-        print(joint_commands["joint_r1"])
 
         self.right_lift_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
             cmd=[joint_commands[key] for key in [
