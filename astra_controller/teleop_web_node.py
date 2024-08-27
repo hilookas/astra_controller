@@ -125,12 +125,12 @@ def main(args=None):
             nonlocal Tcamgoal_last
             if Tcamgoal_last is None:
                 Tcamgoal_last = Tcamgoal
-            low_pass_coff = 0.1
-            Tcamgoal = pt.transform_from_pq(pt.pq_slerp(
-                pt.pq_from_transform(Tcamgoal_last),
-                pt.pq_from_transform(Tcamgoal),
-                low_pass_coff
-            ))
+            # low_pass_coff = 0.1
+            # Tcamgoal = pt.transform_from_pq(pt.pq_slerp(
+            #     pt.pq_from_transform(Tcamgoal_last),
+            #     pt.pq_from_transform(Tcamgoal),
+            #     low_pass_coff
+            # ))
             Tcamgoal_last = Tcamgoal
             
             Tsgoal = Tscam @ Tcamgoal
