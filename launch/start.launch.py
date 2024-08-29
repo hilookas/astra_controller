@@ -37,8 +37,8 @@ def generate_launch_description():
             parameters=[{
                 'video_device': '/dev/video_head',
                 'pixel_format': 'mjpeg2rgb', # mjpeg2rgb to imdecode with usb_cam (usb_cam use ffmpeg decode which is more faster and less cpu usage)
-                'image_width': 1280,
-                'image_height': 720,
+                'image_width': 640,
+                'image_height': 360,
                 'framerate': 30.0,
             }],
             output={'both': 'log'},

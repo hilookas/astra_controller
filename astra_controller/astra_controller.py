@@ -76,7 +76,8 @@ class AstraController:
                 assert msg.encoding == "rgb8"
                 image = np.asarray(msg.data).reshape(msg.height, msg.width, 3) # shape: [720, 1280, 3]
                 if name == "head":
-                    assert msg.height == 720 and msg.width == 1280
+                    # assert msg.height == 720 and msg.width == 1280
+                    assert msg.height == 360 and msg.width == 640
                     # image = cv2.resize(image, (1280, 720))
                 else:
                     assert msg.height == 360 and msg.width == 640
@@ -95,10 +96,10 @@ class AstraController:
             
             try:
                 if "joint_l6" in msg.name:
-                    T_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_lee', rclpy.time.Time())
+                    T_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_lee_teleop', rclpy.time.Time())
                     self.joint_commands["eef_l"] = pq_from_ros_transform(T_msg.transform)
                 if "joint_r6" in msg.name:
-                    T_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_ree', rclpy.time.Time())
+                    T_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_ree_teleop', rclpy.time.Time())
                     self.joint_commands["eef_r"] = pq_from_ros_transform(T_msg.transform)
             except tf2.LookupException:
                 pass
@@ -155,7 +156,8 @@ class AstraController:
         self.done = False
 
         self.images = {
-            "head": np.zeros((720, 1280, 3), np.uint8),
+            # "head": np.zeros((720, 1280, 3), np.uint8),
+            "head": np.zeros((360, 640, 3), np.uint8),
             "wrist_left": np.zeros((360, 640, 3), np.uint8),
             "wrist_right": np.zeros((360, 640, 3), np.uint8)
         }

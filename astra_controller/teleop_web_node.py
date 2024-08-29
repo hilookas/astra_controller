@@ -22,6 +22,7 @@ import astra_controller_interfaces.msg
 
 import numpy as np
 from pytransform3d import transformations as pt
+from pytransform3d import rotations as pr
 
 from tf2_ros.transform_listener import TransformListener
 from tf2_ros.buffer import Buffer
@@ -105,7 +106,7 @@ def main(args=None):
         
         def reset_Tscam():
             nonlocal Tscam
-            Tsgoal_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_ree' if side == "right" else 'link_lee', rclpy.time.Time())
+            Tsgoal_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_ree_teleop' if side == "right" else 'link_lee_teleop', rclpy.time.Time())
             Tsgoal = pt.transform_from_pq(np.array(pq_from_ros_transform(Tsgoal_msg.transform)))
 
             if Tcamgoal_last is None:
@@ -125,12 +126,32 @@ def main(args=None):
             nonlocal Tcamgoal_last
             if Tcamgoal_last is None:
                 Tcamgoal_last = Tcamgoal
+
             # low_pass_coff = 0.1
             # Tcamgoal = pt.transform_from_pq(pt.pq_slerp(
             #     pt.pq_from_transform(Tcamgoal_last),
             #     pt.pq_from_transform(Tcamgoal),
             #     low_pass_coff
             # ))
+
+            # # trust for sensor read (in this case, opencv on smartphone)
+            # p_low_pass_coff = 0.99
+            # q_low_pass_coff = 0.80
+            # pq_camgoal_last = pt.pq_from_transform(Tcamgoal_last)
+            # pq_camgoal = pt.pq_from_transform(Tcamgoal)
+            # p = pq_camgoal_last[:3] * (1 - p_low_pass_coff) + pq_camgoal[:3] * p_low_pass_coff
+            # q = pr.quaternion_slerp(pq_camgoal_last[3:], pq_camgoal[3:], q_low_pass_coff)
+            # Tcamgoal = pt.transform_from_pq(np.concatenate([p, q]))
+            
+            # # trust for sensor read (in this case, opencv on smartphone)
+            # p_low_pass_coff = 1
+            # q_low_pass_coff = 0
+            # pq_camgoal_last = pt.pq_from_transform(Tcamgoal_last)
+            # pq_camgoal = pt.pq_from_transform(Tcamgoal)
+            # p = pq_camgoal_last[:3] * (1 - p_low_pass_coff) + pq_camgoal[:3] * p_low_pass_coff
+            # q = pr.quaternion_slerp(pq_camgoal_last[3:], pq_camgoal[3:], q_low_pass_coff)
+            # Tcamgoal = pt.transform_from_pq(np.concatenate([p, q]))
+
             Tcamgoal_last = Tcamgoal
             
             Tsgoal = Tscam @ Tcamgoal
@@ -158,6 +179,7 @@ def main(args=None):
             ))
                 
         async def reset_arm():
+            lift_distance = 0.8
             if side == "left":
                 joint_names = ["joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6", "joint_l7r", ]
                 initial_joint_states = [lift_distance, 0.785, -0.785, 0, 0, 0, GRIPPER_MAX]
@@ -170,7 +192,7 @@ def main(args=None):
                 
                 dist = np.linalg.norm(np.array(current_joint_states) - initial_joint_states)
                 
-                if dist < 0.2:
+                if dist < 0.1:
                     break
                 
                 command_arm(initial_joint_states)
@@ -197,7 +219,7 @@ def main(args=None):
             assert msg.encoding == "rgb8"
             image = np.asarray(msg.data).reshape(msg.height, msg.width, 3)
             if name == "head":
-                assert msg.height == 720 and msg.width == 1280
+                assert msg.height == 360 and msg.width == 640
                 # image = cv2.resize(image, (1280, 720))
             else:
                 assert msg.height == 360 and msg.width == 640
@@ -298,13 +320,13 @@ def main(args=None):
         try: 
             disable_arm_teleop()
             await asyncio.gather(reset_arm_left(), reset_arm_right())
-            enable_arm_teleop()
+            enable_arm_teleop() # uncomment if you collect data
             reset_publisher.publish(std_msgs.msg.Bool(data=True))
             datachannel_log("Reset")
         except Exception as e:
             err_msg = f"{type(e).__name__}: {e.args}"
             datachannel_log(err_msg)
-            raise e
+            logger.warn(str(e))
         
     def cb(control_type):
         logger.info(control_type)

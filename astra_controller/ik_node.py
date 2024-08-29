@@ -47,11 +47,11 @@ def main(args=None):
     
     side_config = {
         "left": {
-            "eef_link_name": "link_lee",
+            "eef_link_name": "link_lee_teleop",
             "actuated_joint_names": ['joint_l1', 'joint_l2', 'joint_l3', 'joint_l4', 'joint_l5', 'joint_l6'],
         },
         "right": {
-            "eef_link_name": "link_ree",
+            "eef_link_name": "link_ree_teleop",
             "actuated_joint_names": ['joint_r1', 'joint_r2', 'joint_r3', 'joint_r4', 'joint_r5', 'joint_r6'],
         },
     }
