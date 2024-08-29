@@ -156,8 +156,8 @@ class AstraController:
 
         self.images = {
             "head": np.zeros((720, 1280, 3), np.uint8),
-            "wrist_left": np.zeros((720, 1280, 3), np.uint8),
-            "wrist_right": np.zeros((720, 1280, 3), np.uint8)
+            "wrist_left": np.zeros((360, 640, 3), np.uint8),
+            "wrist_right": np.zeros((360, 640, 3), np.uint8)
         }
         
         self.joint_states = {
