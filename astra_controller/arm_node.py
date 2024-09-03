@@ -54,12 +54,12 @@ def main(args=None):
     }
 
     arm_controller = ArmController(device)
-
+    
     joint_state_publisher = node.create_publisher(sensor_msgs.msg.JointState, "joint_states", 10)
     def cb(position, velocity, effort, this_time):
         msg = sensor_msgs.msg.JointState()
         msg.header.stamp = node.get_clock().now().to_msg()
-                
+                        
         msg.name = side_config[side]["joint_names"]
         msg.position = [ 
             float(position[0]), 
@@ -155,7 +155,7 @@ def main(args=None):
         response.data = d[1]
         
         return response
-    node.create_service(astra_controller_interfaces.srv.ReadConfig, '/read_config', cb)
+    node.create_service(astra_controller_interfaces.srv.ReadConfig, 'read_config', cb)
 
     def cb(
         request: astra_controller_interfaces.srv.WriteConfig.Request, 
@@ -182,7 +182,7 @@ def main(args=None):
         response.data = d[1]
         
         return response
-    node.create_service(astra_controller_interfaces.srv.WriteConfig, '/write_config', cb)
+    node.create_service(astra_controller_interfaces.srv.WriteConfig, 'write_config', cb)
 
     def cb(
         request: astra_controller_interfaces.srv.ReadConfigFloat.Request, 
@@ -209,7 +209,7 @@ def main(args=None):
         response.data = d[1]
         
         return response
-    node.create_service(astra_controller_interfaces.srv.ReadConfigFloat, '/read_config_float', cb)
+    node.create_service(astra_controller_interfaces.srv.ReadConfigFloat, 'read_config_float', cb)
 
     def cb(
         request: astra_controller_interfaces.srv.WriteConfigFloat.Request, 
@@ -236,7 +236,7 @@ def main(args=None):
         response.data = d[1]
         
         return response
-    node.create_service(astra_controller_interfaces.srv.WriteConfigFloat, '/write_config_float', cb)
+    node.create_service(astra_controller_interfaces.srv.WriteConfigFloat, 'write_config_float', cb)
 
     try:
         rclpy.spin(node)
