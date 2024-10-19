@@ -29,6 +29,13 @@ from tf2_ros.buffer import Buffer
 
 np.set_printoptions(precision=4, suppress=True)
 
+# See https://github.com/ros2/rmw/blob/rolling/rmw/include/rmw/qos_profiles.h
+# print(rclpy.impl.implementation_singleton.rclpy_implementation.rmw_qos_profile_t.predefined('qos_profile_sensor_data').to_dict())
+# print(rclpy.impl.implementation_singleton.rclpy_implementation.rmw_qos_profile_t.predefined('qos_profile_parameters').to_dict())
+# TODO evaluate delay impact
+qos_profile_sensor_data_reliable = rclpy.qos.QoSProfile(**rclpy.impl.implementation_singleton.rclpy_implementation.rmw_qos_profile_t.predefined('qos_profile_sensor_data').to_dict())
+qos_profile_sensor_data_reliable.reliability = 1
+
 def pq_from_ros_transform(msg: geometry_msgs.msg.Transform):
     return [
         msg.translation.x,
@@ -142,15 +149,6 @@ def main(args=None):
             # p = pq_camgoal_last[:3] * (1 - p_low_pass_coff) + pq_camgoal[:3] * p_low_pass_coff
             # q = pr.quaternion_slerp(pq_camgoal_last[3:], pq_camgoal[3:], q_low_pass_coff)
             # Tcamgoal = pt.transform_from_pq(np.concatenate([p, q]))
-            
-            # # trust for sensor read (in this case, opencv on smartphone)
-            # p_low_pass_coff = 1
-            # q_low_pass_coff = 0
-            # pq_camgoal_last = pt.pq_from_transform(Tcamgoal_last)
-            # pq_camgoal = pt.pq_from_transform(Tcamgoal)
-            # p = pq_camgoal_last[:3] * (1 - p_low_pass_coff) + pq_camgoal[:3] * p_low_pass_coff
-            # q = pr.quaternion_slerp(pq_camgoal_last[3:], pq_camgoal[3:], q_low_pass_coff)
-            # Tcamgoal = pt.transform_from_pq(np.concatenate([p, q]))
 
             Tcamgoal_last = Tcamgoal
             
@@ -230,13 +228,13 @@ def main(args=None):
                 pass
         return cb
     node.create_subscription(
-        sensor_msgs.msg.Image, 'cam_head/image_raw', get_cb("head"), rclpy.qos.qos_profile_sensor_data 
+        sensor_msgs.msg.Image, 'cam_head/image_raw', get_cb("head"), qos_profile_sensor_data_reliable
     )
     node.create_subscription(
-        sensor_msgs.msg.Image, 'left/cam_wrist/image_raw', get_cb("wrist_left"), rclpy.qos.qos_profile_sensor_data 
+        sensor_msgs.msg.Image, 'left/cam_wrist/image_raw', get_cb("wrist_left"), qos_profile_sensor_data_reliable
     )
     node.create_subscription(
-        sensor_msgs.msg.Image, 'right/cam_wrist/image_raw', get_cb("wrist_right"), rclpy.qos.qos_profile_sensor_data 
+        sensor_msgs.msg.Image, 'right/cam_wrist/image_raw', get_cb("wrist_right"), qos_profile_sensor_data_reliable
     )
     # rclpy.qos.qos_profile_sensor_data: best effort reliability and a smaller queue size
     # see: https://docs.ros.org/en/rolling/Concepts/Intermediate/About-Quality-of-Service-Settings.html

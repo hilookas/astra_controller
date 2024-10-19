@@ -17,6 +17,13 @@ from tf2_ros.transform_listener import TransformListener
 from tf2_ros.buffer import Buffer
 import tf2_py as tf2
 
+# See https://github.com/ros2/rmw/blob/rolling/rmw/include/rmw/qos_profiles.h
+# print(rclpy.impl.implementation_singleton.rclpy_implementation.rmw_qos_profile_t.predefined('qos_profile_sensor_data').to_dict())
+# print(rclpy.impl.implementation_singleton.rclpy_implementation.rmw_qos_profile_t.predefined('qos_profile_parameters').to_dict())
+# TODO evaluate delay impact
+qos_profile_sensor_data_reliable = rclpy.qos.QoSProfile(**rclpy.impl.implementation_singleton.rclpy_implementation.rmw_qos_profile_t.predefined('qos_profile_sensor_data').to_dict())
+qos_profile_sensor_data_reliable.reliability = 1
+
 def without_keys(d, keys):
     return {k: v for k, v in d.items() if k not in keys}
         
@@ -84,9 +91,9 @@ class AstraController:
                     # image = cv2.resize(image, (640, 360))
                 self.images[name] = image
             return cb
-        node.create_subscription(sensor_msgs.msg.Image, "cam_head/image_raw", get_cb("head"), rclpy.qos.qos_profile_sensor_data)
-        node.create_subscription(sensor_msgs.msg.Image, "left/cam_wrist/image_raw", get_cb("wrist_left"), rclpy.qos.qos_profile_sensor_data)
-        node.create_subscription(sensor_msgs.msg.Image, "right/cam_wrist/image_raw", get_cb("wrist_right"), rclpy.qos.qos_profile_sensor_data)
+        node.create_subscription(sensor_msgs.msg.Image, "cam_head/image_raw", get_cb("head"), qos_profile_sensor_data_reliable)
+        node.create_subscription(sensor_msgs.msg.Image, "left/cam_wrist/image_raw", get_cb("wrist_left"), qos_profile_sensor_data_reliable)
+        node.create_subscription(sensor_msgs.msg.Image, "right/cam_wrist/image_raw", get_cb("wrist_right"), qos_profile_sensor_data_reliable)
 
         tf_buffer = Buffer()
         TransformListener(tf_buffer, node)
