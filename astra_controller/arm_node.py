@@ -92,6 +92,13 @@ def main(args=None):
         joint_state_publisher.publish(msg)
     arm_controller.state_cb = cb
 
+    debug_publisher = node.create_publisher(std_msgs.msg.Float32MultiArray, f"debug", 10)
+    def cb(data):
+        msg = std_msgs.msg.Float32MultiArray()
+        msg.data = data
+        debug_publisher.publish(msg)
+    arm_controller.debug_cb = cb
+
     pong_publisher = node.create_publisher(std_msgs.msg.UInt16MultiArray, 'pong', 10)
     def cb(data):
         logger.info(f'pong: {data}')
@@ -139,7 +146,7 @@ def main(args=None):
         d = None
         def config_cb(data):
             nonlocal d
-            d = struct.unpack('>xxIixxxxxxxx', data)
+            d = struct.unpack('>Iixxxxxxxx', data)
             e.set()
             
         with arm_controller.config_cb_lock:
@@ -167,7 +174,7 @@ def main(args=None):
         d = None
         def config_cb(data):
             nonlocal d
-            d = struct.unpack('>xxIixxxxxxxx', data)
+            d = struct.unpack('>Iixxxxxxxx', data)
             e.set()
             
         with arm_controller.config_cb_lock:
@@ -194,7 +201,7 @@ def main(args=None):
         d = None
         def config_cb(data):
             nonlocal d
-            d = struct.unpack('>xxIfxxxxxxxx', data)
+            d = struct.unpack('>Ifxxxxxxxx', data)
             e.set()
             
         with arm_controller.config_cb_lock:
@@ -221,7 +228,7 @@ def main(args=None):
         d = None
         def config_cb(data):
             nonlocal d
-            d = struct.unpack('>xxIfxxxxxxxx', data)
+            d = struct.unpack('>Ifxxxxxxxx', data)
             e.set()
             
         with arm_controller.config_cb_lock:

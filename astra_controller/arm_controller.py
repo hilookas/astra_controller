@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 class ArmController:
-    COMM_LEN = 2 + 16
+    COMM_LEN = 2 + 16 + 1
     COMM_HEAD = 0x5A
     COMM_TYPE_PING = 0x00
     COMM_TYPE_PONG = 0x01
@@ -61,6 +61,8 @@ class ArmController:
 
         self.config_cb = None
         self.config_cb_lock = threading.Lock()
+        
+        self.debug_cb = None
 
         self.quit = threading.Event()
         
@@ -71,24 +73,53 @@ class ArmController:
 
         while self.last_position is None: # wait for init done
             time.sleep(0.1)
+    
+    @staticmethod
+    def checksum(data: bytes):
+        checksum = 0
+        for b in data[1:-1]:
+            checksum = checksum + b
+        checksum = checksum % 256
+        return checksum == data[-1]
+    
+    databuf = bytearray()
 
     def recv_thread(self):
         try:
             while not self.quit.is_set():
                 data = self.ser.read(1)
                 if not (data[0] == self.COMM_HEAD): # 逐步同步
-                    sys.stdout.buffer.write(data)
-                    sys.stdout.flush()
+                    if data[0] == "\n".encode("ascii")[0] or data[0] == "\r".encode("ascii")[0]:
+                        if len(self.databuf) > 0 and set(self.databuf) <= set("0123456789-., ".encode("ascii")):
+                            try:
+                                debugdata = [float(x) for x in self.databuf.decode("ascii").split(",")]
+                                if self.debug_cb:
+                                    self.debug_cb(debugdata)
+                            except:
+                                pass
+                        elif len(self.databuf) == 1:
+                            print(self.databuf)
+                            
+                        self.databuf = bytearray()
+                    else:
+                        self.databuf.extend(data)
+                    
+                    # sys.stdout.buffer.write(data)
+                    # sys.stdout.flush()
                     continue
 
                 data += self.ser.read(self.COMM_LEN - 1)
                 assert(len(data) == self.COMM_LEN)
+                
+                if not self.checksum(data):
+                    logger.error(f"checksum failed {data.hex()}")
+                    continue
 
                 if data[1] == self.COMM_TYPE_PONG:
                     if self.state_cb is not None:
-                        self.pong_cb(struct.unpack('>xxHHHHHHxxxx', data))
+                        self.pong_cb(struct.unpack('>HHHHHHxxxx', data[2:-1]))
                 elif data[1] == self.COMM_TYPE_FEEDBACK:
-                    position = self.to_si_unit(np.array(struct.unpack('>xxHHHHHHxxxx', data)))
+                    position = self.to_si_unit(np.array(struct.unpack('>HHHHHHxxxx', data[2:-1])))
                     this_time = time.time()
                     with self.lock:
                         if self.last_time is None:
@@ -106,10 +137,11 @@ class ArmController:
                         if self.state_cb is not None:
                             self.state_cb(self.last_position, self.last_velocity, self.last_effort, self.last_time)
                 elif data[1] == self.COMM_TYPE_CONFIG_FEEDBACK:
-                    self.config_cb(data) # TODO 解决没有时报错
+                    self.config_cb(data[2:-1]) # TODO 解决没有时报错
                 else:
-                    sys.stdout.buffer.write(data)
-                    sys.stdout.flush()
+                    # sys.stdout.buffer.write(data)
+                    # sys.stdout.flush()
+                    pass
         finally:
             logger.info("thread exiting")
 

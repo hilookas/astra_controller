@@ -131,6 +131,8 @@ def generate_launch_description():
             remappings=[
                 ('joint_states', '/joint_states'),
             ],
+            output='screen',
+            emulate_tty=True,
         )
     )
     
