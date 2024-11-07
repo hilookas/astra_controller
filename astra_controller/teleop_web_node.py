@@ -261,7 +261,7 @@ def main(args=None):
             if last_t is None:
                 last_t = this_t
             lift_distance_change = (this_t - last_t) * lift_vel
-            LIFT_DISTANCE_MIN = 0.7
+            LIFT_DISTANCE_MIN = 0
             LIFT_DISTANCE_MAX = 1.2
             if lift_distance + lift_distance_change < LIFT_DISTANCE_MIN or lift_distance + lift_distance_change > LIFT_DISTANCE_MAX:
                 logger.warn("lift over limit")
