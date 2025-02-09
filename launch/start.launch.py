@@ -86,6 +86,8 @@ def generate_launch_description():
             remappings=[
                 ('joint_states', '/joint_states'),
             ],
+            output='screen',
+            emulate_tty=True,
         )
     )
     
@@ -101,6 +103,8 @@ def generate_launch_description():
             remappings=[
                 ('joint_states', '/joint_states'),
             ],
+            output='screen',
+            emulate_tty=True,
         )
     )
     
@@ -116,6 +120,8 @@ def generate_launch_description():
             remappings=[
                 ('joint_states', '/joint_states'),
             ],
+            output='screen',
+            emulate_tty=True,
         )
     )
     
@@ -226,6 +232,14 @@ def generate_launch_description():
     #         respawn=False,
     #         arguments=["-d", LaunchConfiguration("rviz_config")],
     #         output={'both': 'log'},
+    #     )
+    # )
+
+    # ld.add_action(
+    #     Node(
+    #         package="plotjuggler",
+    #         executable="plotjuggler",
+    #         respawn=False,
     #     )
     # )
 

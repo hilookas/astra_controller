@@ -81,14 +81,8 @@ class AstraController:
         def get_cb(name):
             def cb(msg: sensor_msgs.msg.Image):
                 assert msg.encoding == "rgb8"
-                image = np.asarray(msg.data).reshape(msg.height, msg.width, 3) # shape: [720, 1280, 3]
-                if name == "head":
-                    # assert msg.height == 720 and msg.width == 1280
-                    assert msg.height == 360 and msg.width == 640
-                    # image = cv2.resize(image, (1280, 720))
-                else:
-                    assert msg.height == 360 and msg.width == 640
-                    # image = cv2.resize(image, (640, 360))
+                image = np.asarray(msg.data).reshape(msg.height, msg.width, 3) # shape: [360, 640, 3]
+                assert msg.height == 360 and msg.width == 640
                 self.images[name] = image
             return cb
         node.create_subscription(sensor_msgs.msg.Image, "cam_head/image_raw", get_cb("head"), qos_profile_sensor_data_reliable)
@@ -163,7 +157,6 @@ class AstraController:
         self.done = False
 
         self.images = {
-            # "head": np.zeros((720, 1280, 3), np.uint8),
             "head": np.zeros((360, 640, 3), np.uint8),
             "wrist_left": np.zeros((360, 640, 3), np.uint8),
             "wrist_right": np.zeros((360, 640, 3), np.uint8)

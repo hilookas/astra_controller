@@ -142,7 +142,7 @@ def main(args=None):
             # ))
 
             # # trust for sensor read (in this case, opencv on smartphone)
-            # p_low_pass_coff = 0.99
+            # p_low_pass_coff = 0.90
             # q_low_pass_coff = 0.80
             # pq_camgoal_last = pt.pq_from_transform(Tcamgoal_last)
             # pq_camgoal = pt.pq_from_transform(Tcamgoal)
@@ -218,10 +218,8 @@ def main(args=None):
             image = np.asarray(msg.data).reshape(msg.height, msg.width, 3)
             if name == "head":
                 assert msg.height == 360 and msg.width == 640
-                # image = cv2.resize(image, (1280, 720))
             else:
                 assert msg.height == 360 and msg.width == 640
-                # image = cv2.resize(image, (640, 360))
             try:
                 getattr(webserver, f"track_{name}").feed(image)
             except:
@@ -315,6 +313,7 @@ def main(args=None):
             webserver.datachannel.send(json.dumps(message))
     
     async def reset_arm():
+        print("reset_arm")
         try: 
             disable_arm_teleop()
             await asyncio.gather(reset_arm_left(), reset_arm_right())
