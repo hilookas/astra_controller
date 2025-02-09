@@ -9,6 +9,14 @@ import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# import rclpy
+# import rclpy.node
+# import rclpy.qos
+# import rclpy.action
+
+# import std_msgs.msg
+# import math
+
 class BaseController:
     LEFT_NODE_ID = 0
     RIGHT_NODE_ID = 1
@@ -20,6 +28,12 @@ class BaseController:
     WHEEL_D = 0.139 # in [m]
 
     def __init__(self, name):
+        # node = rclpy.node.Node('base_node')
+        # self.float0_publisher = node.create_publisher(std_msgs.msg.Float32, "/float0", 10)
+        # self.float1_publisher = node.create_publisher(std_msgs.msg.Float32, "/float1", 10)
+        # self.float2_publisher = node.create_publisher(std_msgs.msg.Float32, "/float2", 10)
+        # self.float3_publisher = node.create_publisher(std_msgs.msg.Float32, "/float3", 10)
+        
         logger.info(f"Using device {name}")
 
         self.state_cb = None
@@ -61,6 +75,13 @@ class BaseController:
 
         logging.debug(f"[Node #{node_id}] pos: {pos:.3f} [turns], vel: {vel:.3f} [turns/s]")
 
+        # if node_id == self.LEFT_NODE_ID:
+        #     self.float0_publisher.publish(std_msgs.msg.Float32(data=pos))
+        #     self.float1_publisher.publish(std_msgs.msg.Float32(data=vel))
+        # else:
+        #     self.float2_publisher.publish(std_msgs.msg.Float32(data=pos))
+        #     self.float3_publisher.publish(std_msgs.msg.Float32(data=vel))
+
         this_time = time.time()
         with self.lock:
             if self.last_time is None:
@@ -100,10 +121,13 @@ class BaseController:
         drv.set_linear_count(0)
 
         # Set Controller Mode
-        drv.set_controller_mode("VELOCITY_CONTROL", "VEL_RAMP")
+        drv.set_controller_mode("POSITION_CONTROL", "TRAP_TRAJ")
 
         # Set gains
-        drv.set_vel_gains(0.2, 0.2)
+        drv.set_pos_gain(20.0)
+        
+        # Set gains
+        drv.set_vel_gains(0.1, 0)
 
         # set control mode
         drv.set_axis_state_no_wait("CLOSED_LOOP_CONTROL")
@@ -114,13 +138,13 @@ class BaseController:
 
         drv.feedback_callback = self.feedback_cb
 
-        logger.info("Running velocity control")
+        logger.info("Running base control")
         try:
             while True:
                 if self.quit.is_set():
                     raise Exception("quit")
                 with self.write_lock:
-                    drv.set_input_vel(self.setpoint[node_id])
+                    drv.set_input_pos(self.setpoint[node_id])
                 drv.check_errors()
                 await asyncio.sleep(0.1)
         finally:
@@ -129,10 +153,13 @@ class BaseController:
     def set_vel(self, linear_vel, angular_vel):
         left_vel = (linear_vel - angular_vel * self.WHEEL_BASE / 2) / (math.pi * self.WHEEL_D) * self.LEFT_INSTALL_DIR
         right_vel = (linear_vel + angular_vel * self.WHEEL_BASE / 2) / (math.pi * self.WHEEL_D) * self.RIGHT_INSTALL_DIR
+        
+        # TODO 更好的改进一下
+        time_delta = 0.1
 
         with self.write_lock:
-            self.setpoint[self.LEFT_NODE_ID] = left_vel
-            self.setpoint[self.RIGHT_NODE_ID] = right_vel
+            self.setpoint[self.LEFT_NODE_ID] += left_vel * time_delta
+            self.setpoint[self.RIGHT_NODE_ID] += right_vel * time_delta
 
     def stop(self):
         if not self.quit.is_set():
