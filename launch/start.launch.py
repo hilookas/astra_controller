@@ -211,15 +211,15 @@ def generate_launch_description():
         )
     )
     
-    # # Teleop (Web)
-    # ld.add_action(
-    #     Node(
-    #         package=package_name,
-    #         executable="teleop_web_node",
-    #         output='screen',
-    #         emulate_tty=True,
-    #     )
-    # )
+    # Teleop (Web)
+    ld.add_action(
+        Node(
+            package=package_name,
+            executable="teleop_web_node",
+            output='screen',
+            emulate_tty=True,
+        )
+    )
     
     # Visualization
     ld.add_action(

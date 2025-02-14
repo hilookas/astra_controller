@@ -57,23 +57,23 @@ def main(args=None):
     tf_buffer = Buffer()
     tf_listener = TransformListener(tf_buffer, node)
     
-    def get_current_eef_pose(side):
+    def get_current_eef_pose_cb(side):
         Tsgoal_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_ree_teleop' if side == "right" else 'link_lee_teleop', rclpy.time.Time())
         Tsgoal = pt.transform_from_pq(np.array(pq_from_ros_transform(Tsgoal_msg.transform)))
         return Tsgoal
-    teleopoperator.on_get_current_eef_pose = get_current_eef_pose
+    teleopoperator.on_get_current_eef_pose = get_current_eef_pose_cb
     
-    def on_get_eef_pose(eef_link_name, joint_names, initial_joint_states):
+    def get_eef_pose_cb(side, initial_joint_states):
         urdf_name = str(Path(get_package_share_directory("astra_description")) / "urdf" / "astra_description_rel.urdf")
 
         M, Slist, Blist, Mlist, Glist, robot = loadURDF(
             urdf_name, 
-            eef_link_name=eef_link_name, 
-            actuated_joint_names=joint_names
+            eef_link_name='link_ree_teleop' if side == "right" else 'link_lee_teleop', 
+            actuated_joint_names=["joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6" ] if side == "right" else ["joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6" ]
         )
         
         return mr.FKinBody(M, Slist, initial_joint_states)
-    teleopoperator.on_get_eef_pose = on_get_eef_pose
+    teleopoperator.on_get_eef_pose = get_eef_pose_cb
     
     def pub_T(pub: rclpy.publisher.Publisher, T, frame_id='base_link'):
         msg = geometry_msgs.msg.PoseStamped()
@@ -158,6 +158,8 @@ def main(args=None):
     # see: https://blog.csdn.net/qq_38649880/article/details/105908598
 
     rclpy.spin(node)
+    
+    del teleopoperator
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
