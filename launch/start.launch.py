@@ -81,7 +81,7 @@ def generate_launch_description():
             namespace='left/lift',
             parameters=[{
                 'device': '/dev/tty_puppet_lift_left',
-                'side': 'left',
+                'joint_names': [ "joint_l1", ],
             }],
             remappings=[
                 ('joint_states', '/joint_states'),
@@ -98,10 +98,12 @@ def generate_launch_description():
             namespace='left/arm',
             parameters=[{
                 'device': '/dev/tty_puppet_left',
-                'side': 'left',
+                'joint_names': [ "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6", ],
+                'gripper_joint_names': [ "joint_l7l", "joint_l7r", ],
             }],
             remappings=[
                 ('joint_states', '/joint_states'),
+                ('gripper_joint_states', '/joint_states'),
             ],
             output='screen',
             emulate_tty=True,
@@ -115,7 +117,7 @@ def generate_launch_description():
             namespace='right/lift',
             parameters=[{
                 'device': '/dev/tty_puppet_lift_right',
-                'side': 'right',
+                'joint_names': [ "joint_r1", ],
             }],
             remappings=[
                 ('joint_states', '/joint_states'),
@@ -132,10 +134,12 @@ def generate_launch_description():
             namespace='right/arm',
             parameters=[{
                 'device': '/dev/tty_puppet_right',
-                'side': 'right',
+                'joint_names': [ "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6", ],
+                'gripper_joint_names': [ "joint_r7l", "joint_r7r", ],
             }],
             remappings=[
                 ('joint_states', '/joint_states'),
+                ('gripper_joint_states', '/joint_states'),
             ],
             output='screen',
             emulate_tty=True,
@@ -149,7 +153,7 @@ def generate_launch_description():
     #         executable="dry_run_node",
     #         namespace='left',
     #         parameters=[{
-    #             'side': 'left',
+    #             'joint_names': [ "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6", "joint_l7r", "joint_l7l" ],
     #         }],
     #         remappings=[
     #             ('joint_states', '/joint_states'),
@@ -163,7 +167,7 @@ def generate_launch_description():
     #         executable="dry_run_node",
     #         namespace='right',
     #         parameters=[{
-    #             'side': 'right',
+    #             'joint_names': [ "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6", "joint_r7r", "joint_r7l" ],
     #         }],
     #         remappings=[
     #             ('joint_states', '/joint_states'),
@@ -178,7 +182,8 @@ def generate_launch_description():
             executable="ik_node",
             namespace='left',
             parameters=[{
-                'side': 'left',
+                'eef_link_name': 'link_lee_teleop', 
+                'joint_names': ['joint_l1', 'joint_l2', 'joint_l3', 'joint_l4', 'joint_l5', 'joint_l6'],
             }],
         )
     )
@@ -189,7 +194,8 @@ def generate_launch_description():
             executable="ik_node",
             namespace='right',
             parameters=[{
-                'side': 'right',
+                'eef_link_name': 'link_ree_teleop',
+                'joint_names': ['joint_r1', 'joint_r2', 'joint_r3', 'joint_r4', 'joint_r5', 'joint_r6'],
             }],
         )
     )
@@ -205,15 +211,15 @@ def generate_launch_description():
         )
     )
     
-    # Teleop (Web)
-    ld.add_action(
-        Node(
-            package=package_name,
-            executable="teleop_web_node",
-            output='screen',
-            emulate_tty=True,
-        )
-    )
+    # # Teleop (Web)
+    # ld.add_action(
+    #     Node(
+    #         package=package_name,
+    #         executable="teleop_web_node",
+    #         output='screen',
+    #         emulate_tty=True,
+    #     )
+    # )
     
     # Visualization
     ld.add_action(

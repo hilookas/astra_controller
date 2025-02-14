@@ -3,9 +3,10 @@ import rclpy.node
 import rclpy.publisher
 
 import geometry_msgs.msg
-from astra_teleop.process import process as teleop_process
+from astra_teleop.process import get_process
 from pytransform3d import transformations as pt
 import numpy as np
+from pprint import pprint
 
 def main(args=None):
     rclpy.init(args=args)
@@ -63,11 +64,12 @@ def main(args=None):
         # pub_T(pub1, Tscam @ Tcamgoal1)
         # pub_T(pub2, Tscam @ Tcamgoal2)
 
-    teleop_process(
-        device="/dev/video0", calibration_directory="./calibration_images", 
-        left_hand_cb=None, right_hand_cb=cb,
-        debug=False
-    )
+    process = get_process(device="/dev/video0", calibration_directory="./calibration_images", debug=False)
+    while True:
+        tag2cam_left, tag2cam_right = process()
+        pprint(tag2cam_left)
+        pprint(tag2cam_right)
+        cb(tag2cam_right)
 
     rclpy.spin(node) # will never go here
 

@@ -154,12 +154,11 @@ class BaseController:
         left_vel = (linear_vel - angular_vel * self.WHEEL_BASE / 2) / (math.pi * self.WHEEL_D) * self.LEFT_INSTALL_DIR
         right_vel = (linear_vel + angular_vel * self.WHEEL_BASE / 2) / (math.pi * self.WHEEL_D) * self.RIGHT_INSTALL_DIR
         
-        # TODO 更好的改进一下
-        time_delta = 0.1
+        TIME_DELTA = 0.1 # TODO Better solution
 
         with self.write_lock:
-            self.setpoint[self.LEFT_NODE_ID] += left_vel * time_delta
-            self.setpoint[self.RIGHT_NODE_ID] += right_vel * time_delta
+            self.setpoint[self.LEFT_NODE_ID] += left_vel * TIME_DELTA
+            self.setpoint[self.RIGHT_NODE_ID] += right_vel * TIME_DELTA
 
     def stop(self):
         if not self.quit.is_set():

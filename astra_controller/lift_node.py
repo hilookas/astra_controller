@@ -17,26 +17,12 @@ def main(args=None):
     logger = node.get_logger()
     
     node.declare_parameter('device', '/dev/tty_puppet_lift_right')
-    node.declare_parameter('side', 'right')
+    node.declare_parameter('joint_names', [ "joint_r1" ])
 
     device = node.get_parameter('device').value
-    side = node.get_parameter('side').value
+    joint_names = node.get_parameter('joint_names').value
     
-    if side not in ['left', 'right']:
-        raise Exception("Unknown side")
-    
-    side_config = {
-        "left": {
-            "joint_names": [
-                "joint_l1",
-            ],
-        },
-        "right": {
-            "joint_names": [
-                "joint_r1",
-            ],
-        },
-    }
+    assert len(joint_names) == 1
 
     lift_controller = LiftController(device)
 
@@ -44,24 +30,17 @@ def main(args=None):
     def cb(position, velocity, effort, this_time):
         msg = sensor_msgs.msg.JointState()
         msg.header.stamp = node.get_clock().now().to_msg()
-        
-        msg.name = side_config[side]["joint_names"]
-        msg.position = [ 
-            float(position),
-        ]
-        msg.velocity = [ 
-            float(velocity),
-        ]
-        msg.effort = [ 
-            float(effort),
-        ]
-
+        msg.name = joint_names
+        msg.position = [ float(position) ]
+        msg.velocity = [ float(velocity) ]
+        msg.effort = [ float(effort) ]
         joint_state_publisher.publish(msg)
     lift_controller.state_cb = cb
     
-    def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
-        lift_controller.set_pos(msg.cmd[0])
-    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, 'joint_command', cb, rclpy.qos.qos_profile_sensor_data)
+    def cb(msg: astra_controller_interfaces.msg.JointCommand):
+        assert msg.name == joint_names
+        lift_controller.set_pos(msg.position_cmd[0])
+    node.create_subscription(astra_controller_interfaces.msg.JointCommand, 'joint_command', cb, rclpy.qos.qos_profile_sensor_data)
 
     rclpy.spin(node)
 

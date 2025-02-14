@@ -38,54 +38,43 @@ def main(args=None):
 
     node = rclpy.node.Node("ik_node")
     
-    node.declare_parameter('side', 'right')
+    node.declare_parameter('eef_link_name', 'link_ree_teleop')
+    node.declare_parameter('joint_names', [ 'joint_r1', 'joint_r2', 'joint_r3', 'joint_r4', 'joint_r5', 'joint_r6' ])
 
-    side = node.get_parameter('side').value
+    eef_link_name = node.get_parameter('eef_link_name').value
+    joint_names = node.get_parameter('joint_names').value
     
-    if side not in ['left', 'right']:
-        raise Exception("Unknown side")
-    
-    side_config = {
-        "left": {
-            "eef_link_name": "link_lee_teleop",
-            "actuated_joint_names": ['joint_l1', 'joint_l2', 'joint_l3', 'joint_l4', 'joint_l5', 'joint_l6'],
-        },
-        "right": {
-            "eef_link_name": "link_ree_teleop",
-            "actuated_joint_names": ['joint_r1', 'joint_r2', 'joint_r3', 'joint_r4', 'joint_r5', 'joint_r6'],
-        },
-    }
+    assert len(joint_names) == 6
 
     # Ref: interbotix_ros_toolboxes/interbotix_xs_toolbox/interbotix_xs_modules/interbotix_xs_modules/xs_robot/arm.py
     urdf_name = str(Path(get_package_share_directory("astra_description")) / "urdf" / "astra_description_rel.urdf")
-    
-    eef_link_name=side_config[side]["eef_link_name"]
-    actuated_joint_names=side_config[side]["actuated_joint_names"]
 
     M, Slist, Blist, Mlist, Glist, robot = loadURDF(
         urdf_name, 
         eef_link_name=eef_link_name, 
-        actuated_joint_names=actuated_joint_names
+        actuated_joint_names=joint_names
     )
     
     joint_limit_lower = []
     joint_limit_upper = []
-    for joint_name in actuated_joint_names:
+    for joint_name in joint_names:
         joint = robot.joint_map[joint_name]
         joint_limit_lower.append(joint.limit.lower)
         joint_limit_upper.append(joint.limit.upper)
 
-    arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "arm/joint_command", 10)
-    lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, "lift/joint_command", 10)
+    arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, "arm/joint_command", 10)
+    lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, "lift/joint_command", 10)
         
     def pub_theta(theta_list):
-        msg = astra_controller_interfaces.msg.JointGroupCommand(
-            cmd=list(theta_list[1:])
+        msg = astra_controller_interfaces.msg.JointCommand(
+            name=joint_names[1:],
+            position_cmd=list(theta_list[1:])
         )
         arm_joint_command_publisher.publish(msg)
 
-        msg = astra_controller_interfaces.msg.JointGroupCommand(
-            cmd=list(theta_list[:1])
+        msg = astra_controller_interfaces.msg.JointCommand(
+            name=joint_names[:1],
+            position_cmd=list(theta_list[:1])
         )
         lift_joint_command_publisher.publish(msg)
         

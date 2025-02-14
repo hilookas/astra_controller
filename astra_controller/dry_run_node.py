@@ -21,31 +21,20 @@ def main(args=None):
     joint_state_publisher = node.create_publisher(sensor_msgs.msg.JointState, "joint_states", 10)
     
     node.declare_parameter('actively_send_joint_state', True)
-    node.declare_parameter('side', 'right')
+    node.declare_parameter('joint_names', [ "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6", "joint_l7r", "joint_l7l" ])
 
     actively_send_joint_state = node.get_parameter('actively_send_joint_state').value
-    side = node.get_parameter('side').value
+    joint_names = node.get_parameter('joint_names').value
     
-    if side not in ['left', 'right']:
-        raise Exception("Unknown side")
-    
-    side_config = {
-        "left": {
-            "joint_names": [ "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6", "joint_l7r", "joint_l7l" ],
-        },
-        "right": {
-            "joint_names": [ "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6", "joint_r7r", "joint_r7l" ],
-        },
-    }
+    assert len(joint_names) == 8
 
     if actively_send_joint_state:
         # actively send current joint_state
-        joint_states = { joint_name: 0 for joint_name in side_config[side]["joint_names"] }
+        joint_states = { joint_name: 0 for joint_name in joint_names }
         def publish_joint_states():
             while True:
                 msg = sensor_msgs.msg.JointState()
                 msg.header.stamp = node.get_clock().now().to_msg()
-
                 msg.name = list(joint_states.keys())
                 msg.position = [float(x) for x in joint_states.values()]
 
@@ -54,41 +43,44 @@ def main(args=None):
         t = threading.Thread(target=publish_joint_states, daemon=True)
         t.start()
 
-    def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
+    def cb(msg: astra_controller_interfaces.msg.JointCommand):
+        assert msg.name == joint_names[1:6]
+        
         send_msg = sensor_msgs.msg.JointState()
         send_msg.header.stamp = node.get_clock().now().to_msg()
-
-        send_msg.name = side_config[side]["joint_names"][1:6]
-        send_msg.position = msg.cmd
+        send_msg.name = joint_names[1:6]
+        send_msg.position = msg.position_cmd
         joint_state_publisher.publish(send_msg)
 
         if actively_send_joint_state:
             joint_states.update(dict(zip(send_msg.name, send_msg.position)))
-    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "arm/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(astra_controller_interfaces.msg.JointCommand, "arm/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
 
-    def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
+    def cb(msg: astra_controller_interfaces.msg.JointCommand):
+        assert msg.name == joint_names[6:7]
+        
         send_msg = sensor_msgs.msg.JointState()
         send_msg.header.stamp = node.get_clock().now().to_msg()
-
-        send_msg.name = side_config[side]["joint_names"][6:8]
-        send_msg.position = [ msg.cmd[0], -msg.cmd[0] ]
+        send_msg.name = joint_names[6:8]
+        send_msg.position = [ msg.position_cmd[0], -msg.position_cmd[0] ]
         joint_state_publisher.publish(send_msg)
 
         if actively_send_joint_state:
             joint_states.update(dict(zip(send_msg.name, send_msg.position)))
-    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "arm/gripper_joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(astra_controller_interfaces.msg.JointCommand, "arm/gripper_joint_command", cb, rclpy.qos.qos_profile_sensor_data)
 
-    def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
+    def cb(msg: astra_controller_interfaces.msg.JointCommand):
+        assert msg.name == joint_names[0:1]
+        
         send_msg = sensor_msgs.msg.JointState()
         send_msg.header.stamp = node.get_clock().now().to_msg()
-
-        send_msg.name = side_config[side]["joint_names"][0:1]
-        send_msg.position = msg.cmd
+        send_msg.name = joint_names[0:1]
+        send_msg.position = msg.position_cmd
         joint_state_publisher.publish(send_msg)
 
         if actively_send_joint_state:
             joint_states.update(dict(zip(send_msg.name, send_msg.position)))
-    node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "lift/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+    node.create_subscription(astra_controller_interfaces.msg.JointCommand, "lift/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
 
     rclpy.spin(node)
 
