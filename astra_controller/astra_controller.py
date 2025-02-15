@@ -81,8 +81,8 @@ class AstraController:
         def get_cb(name):
             def cb(msg: sensor_msgs.msg.Image):
                 assert msg.encoding == "rgb8"
-                image = np.asarray(msg.data).reshape(msg.height, msg.width, 3) # shape: [360, 640, 3]
                 assert msg.height == 360 and msg.width == 640
+                image = np.asarray(msg.data).reshape(msg.height, msg.width, 3) # shape: [360, 640, 3]
                 self.images[name] = image
             return cb
         node.create_subscription(sensor_msgs.msg.Image, "cam_head/image_raw", get_cb("head"), qos_profile_sensor_data_reliable)
@@ -117,16 +117,14 @@ class AstraController:
             self.joint_states["odom"] = pq_from_ros_pose(msg.pose.pose)
         node.create_subscription(nav_msgs.msg.Odometry, "odom", cb, rclpy.qos.qos_profile_sensor_data)
         
-        def get_cb(names):
-            def cb(msg: astra_controller_interfaces.msg.JointGroupCommand):
-                self.joint_commands.update(without_keys(dict(zip(names, msg.cmd)), ["joint_r7l", "joint_l7l"]))
-            return cb
-        node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "left/lift/joint_command", get_cb(["joint_l1"]), rclpy.qos.qos_profile_sensor_data)
-        node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "left/arm/joint_command", get_cb(["joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6"]), rclpy.qos.qos_profile_sensor_data)
-        node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "left/arm/gripper_joint_command", get_cb(["joint_l7r"]), rclpy.qos.qos_profile_sensor_data)
-        node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "right/lift/joint_command", get_cb(["joint_r1"]), rclpy.qos.qos_profile_sensor_data)
-        node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "right/arm/joint_command", get_cb(["joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6"]), rclpy.qos.qos_profile_sensor_data)
-        node.create_subscription(astra_controller_interfaces.msg.JointGroupCommand, "right/arm/gripper_joint_command", get_cb(["joint_r7r"]), rclpy.qos.qos_profile_sensor_data)
+        def cb(msg: astra_controller_interfaces.msg.JointCommand):
+            self.joint_commands.update(without_keys(dict(zip(msg.name, msg.position_cmd)), ["joint_r7l", "joint_l7l"]))
+        node.create_subscription(astra_controller_interfaces.msg.JointCommand, "left/lift/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+        node.create_subscription(astra_controller_interfaces.msg.JointCommand, "left/arm/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+        node.create_subscription(astra_controller_interfaces.msg.JointCommand, "left/arm/gripper_joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+        node.create_subscription(astra_controller_interfaces.msg.JointCommand, "right/lift/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+        node.create_subscription(astra_controller_interfaces.msg.JointCommand, "right/arm/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+        node.create_subscription(astra_controller_interfaces.msg.JointCommand, "right/arm/gripper_joint_command", cb, rclpy.qos.qos_profile_sensor_data)
         
         def get_cb(name):
             def cb(msg: geometry_msgs.msg.PoseStamped):
@@ -140,13 +138,16 @@ class AstraController:
             self.joint_commands["twist_angular"] = msg.angular.z
         node.create_subscription(geometry_msgs.msg.Twist, "cmd_vel", cb, rclpy.qos.qos_profile_sensor_data)
         
-        self.left_arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"left/arm/joint_command", 10)
-        self.left_lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"left/lift/joint_command", 10)
-        self.left_arm_gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"left/arm/gripper_joint_command", 10)
+        self.left_arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, f"left/arm/joint_command", 10)
+        self.left_lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, f"left/lift/joint_command", 10)
+        self.left_arm_gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, f"left/arm/gripper_joint_command", 10)
         
-        self.right_arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"right/arm/joint_command", 10)
-        self.right_lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"right/lift/joint_command", 10)
-        self.right_arm_gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointGroupCommand, f"right/arm/gripper_joint_command", 10)
+        self.right_arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, f"right/arm/joint_command", 10)
+        self.right_lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, f"right/lift/joint_command", 10)
+        self.right_arm_gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, f"right/arm/gripper_joint_command", 10)
+        
+        self.left_goal_pose_publisher = node.create_publisher(geometry_msgs.msg.PoseStamped, f"left/goal_pose", 10)
+        self.right_goal_pose_publisher = node.create_publisher(geometry_msgs.msg.PoseStamped, f"right/goal_pose", 10)
         
         self.cmd_vel_publisher = node.create_publisher(geometry_msgs.msg.Twist, 'cmd_vel', 10)
         
@@ -260,43 +261,36 @@ class AstraController:
                 "twist_linear", "twist_angular", 
             ], goal_pos)))
         
-            self.left_arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
-                cmd=[joint_commands[key] for key in [
-                    "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
-                ]]
+            self.left_arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointCommand(
+                name=[ "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6", ],
+                position_cmd=[joint_commands[key] for key in [ "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6", ]]
             ))
 
-            self.left_lift_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
-                cmd=[joint_commands[key] for key in [
-                    "joint_l1"
-                ]]
+            self.left_lift_joint_command_publisher.publish(astra_controller_interfaces.msg.JointCommand(
+                name=[ "joint_l1", ],
+                position_cmd=[joint_commands[key] for key in [ "joint_l1", ]]
             ))
 
-            self.left_arm_gripper_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
-                cmd=[joint_commands[key] for key in [
-                    "joint_l7r",
-                ]]
+            self.left_arm_gripper_joint_command_publisher.publish(astra_controller_interfaces.msg.JointCommand(
+                name=[ "joint_l7r", ],
+                position_cmd=[joint_commands[key] for key in [ "joint_l7r", ]]
             ))
             
 
-            self.right_arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
-                cmd=[joint_commands[key] for key in [
-                    "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
-                ]]
+            self.right_arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointCommand(
+                name=[ "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6", ],
+                position_cmd=[joint_commands[key] for key in [ "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6", ]]
             ))
 
-            self.right_lift_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
-                cmd=[joint_commands[key] for key in [
-                    "joint_r1"
-                ]]
+            self.right_lift_joint_command_publisher.publish(astra_controller_interfaces.msg.JointCommand(
+                name=[ "joint_r1", ],
+                position_cmd=[joint_commands[key] for key in [ "joint_r1", ]]
             ))
 
-            self.right_arm_gripper_joint_command_publisher.publish(astra_controller_interfaces.msg.JointGroupCommand(
-                cmd=[joint_commands[key] for key in [
-                    "joint_r7r",
-                ]]
+            self.right_arm_gripper_joint_command_publisher.publish(astra_controller_interfaces.msg.JointCommand(
+                name=[ "joint_r7r", ],
+                position_cmd=[joint_commands[key] for key in [ "joint_r7r", ]]
             ))
-            
             
             msg = geometry_msgs.msg.Twist()
             msg.linear.x = joint_commands["twist_linear"]

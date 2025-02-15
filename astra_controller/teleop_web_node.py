@@ -31,6 +31,9 @@ np.set_printoptions(precision=4, suppress=True)
 # print(rclpy.impl.implementation_singleton.rclpy_implementation.rmw_qos_profile_t.predefined('qos_profile_sensor_data').to_dict())
 # print(rclpy.impl.implementation_singleton.rclpy_implementation.rmw_qos_profile_t.predefined('qos_profile_parameters').to_dict())
 # TODO evaluate delay impact
+# rclpy.qos.qos_profile_sensor_data: best effort reliability and a smaller queue size
+# see: https://docs.ros.org/en/rolling/Concepts/Intermediate/About-Quality-of-Service-Settings.html
+# see: https://blog.csdn.net/qq_38649880/article/details/105908598
 qos_profile_sensor_data_reliable = rclpy.qos.QoSProfile(**rclpy.impl.implementation_singleton.rclpy_implementation.rmw_qos_profile_t.predefined('qos_profile_sensor_data').to_dict())
 qos_profile_sensor_data_reliable.reliability = 1
 
@@ -153,9 +156,6 @@ def main(args=None):
     node.create_subscription(sensor_msgs.msg.Image, 'cam_head/image_raw', get_cb("head"), qos_profile_sensor_data_reliable)
     node.create_subscription(sensor_msgs.msg.Image, 'left/cam_wrist/image_raw', get_cb("wrist_left"), qos_profile_sensor_data_reliable)
     node.create_subscription(sensor_msgs.msg.Image, 'right/cam_wrist/image_raw', get_cb("wrist_right"), qos_profile_sensor_data_reliable)
-    # rclpy.qos.qos_profile_sensor_data: best effort reliability and a smaller queue size
-    # see: https://docs.ros.org/en/rolling/Concepts/Intermediate/About-Quality-of-Service-Settings.html
-    # see: https://blog.csdn.net/qq_38649880/article/details/105908598
 
     rclpy.spin(node)
     
