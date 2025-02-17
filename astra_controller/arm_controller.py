@@ -22,6 +22,7 @@ class ArmController:
     COMM_TYPE_CONFIG_WRITE = 0x05
     COMM_TYPE_CONFIG_READ = 0x06
     COMM_TYPE_CONFIG_FEEDBACK = 0x07
+    COMM_TYPE_PIDTUNE = 0x08
 
     GRIPPER_GEAR_R = 0.027 / 2
 
@@ -66,13 +67,18 @@ class ArmController:
 
         self.quit = threading.Event()
         
-        self.set_torque(1)
-
         self.t = threading.Thread(target=self.recv_thread, daemon=True)
         self.t.start()
+        
+        self.set_torque(1)
+        self.set_pid()
 
         while self.last_position is None: # wait for init done
             time.sleep(0.1)
+    
+    # def set_pid(self, p=10.0, i=7.0, d=20.0, i_max=800, i_clip_thres=10.0, i_clip_coef=0.5):
+    def set_pid(self, p=8.0, i=0.5, d=0, i_max=100, i_clip_thres=100000.0, i_clip_coef=1):
+        self.write(struct.pack('>BBffffffff', self.COMM_HEAD, self.COMM_TYPE_PIDTUNE, *[p, i, d, i_clip_thres, i_clip_coef, i_max, 0, 0]))
     
     @staticmethod
     def checksum(data: bytes):
@@ -104,8 +110,8 @@ class ArmController:
                     else:
                         self.databuf.extend(data)
                     
-                    # sys.stdout.buffer.write(data)
-                    # sys.stdout.flush()
+                    sys.stdout.buffer.write(data)
+                    sys.stdout.flush()
                     continue
 
                 data += self.ser.read(self.COMM_LEN - 1)

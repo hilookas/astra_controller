@@ -2,7 +2,7 @@ import rclpy
 import rclpy.node
 import rclpy.publisher
 
-from astra_teleop_web.teleoprator import Teleopoperator
+from astra_teleop_web.teleoprator import Teleopoperator, INITIAL_LIFT_DISTANCE
 
 import sensor_msgs.msg
 
@@ -66,17 +66,20 @@ def main(args=None):
         return Tsgoal
     teleopoperator.on_get_current_eef_pose = get_current_eef_pose_cb
     
-    def get_eef_pose_cb(side, initial_joint_states):
+    def get_initial_eef_pose_cb(side):
+        joint_names = ["joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6" ] if side == "right" else ["joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6" ]
+        initial_joint_states = [INITIAL_LIFT_DISTANCE, -0.785, 0.785, 0, 0, 0] if side == "right" else [INITIAL_LIFT_DISTANCE, 0.785, -0.785, 0, 0, 0]
+
         urdf_name = str(Path(get_package_share_directory("astra_description")) / "urdf" / "astra_description_rel.urdf")
 
         M, Slist, Blist, Mlist, Glist, robot = loadURDF(
             urdf_name, 
             eef_link_name='link_ree_teleop' if side == "right" else 'link_lee_teleop', 
-            actuated_joint_names=["joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6" ] if side == "right" else ["joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6" ]
+            actuated_joint_names=joint_names
         )
         
         return mr.FKinBody(M, Slist, initial_joint_states)
-    teleopoperator.on_get_eef_pose = get_eef_pose_cb
+    teleopoperator.on_get_initial_eef_pose = get_initial_eef_pose_cb
     
     def pub_T(pub: rclpy.publisher.Publisher, T, frame_id='base_link'):
         msg = geometry_msgs.msg.PoseStamped()
@@ -108,17 +111,14 @@ def main(args=None):
         arm_joint_command_publisher[side] = node.create_publisher(astra_controller_interfaces.msg.JointCommand, f"{side}/arm/joint_command", 10)
         lift_joint_command_publisher[side] = node.create_publisher(astra_controller_interfaces.msg.JointCommand, f"{side}/lift/joint_command", 10)
 
-    def pub_goal_cb(side, Tsgoal):
-        pub_T(goal_pose_publisher[side], Tsgoal)
+    def pub_goal_cb(side, Tsgoal, Tscam=None, Tsgoal_inactive=None):
+        if Tsgoal is not None:
+            pub_T(goal_pose_publisher[side], Tsgoal)
+        if Tsgoal_inactive is not None:
+            pub_T(goal_pose_inactive_publisher[side], Tsgoal_inactive)
+        if Tscam is not None:
+            pub_T(cam_pose_publisher[side], Tscam)
     teleopoperator.on_pub_goal = pub_goal_cb
-
-    def pub_goal_inactive_cb(side, Tsgoal):
-        pub_T(goal_pose_inactive_publisher[side], Tsgoal)
-    teleopoperator.on_pub_goal_inactive = pub_goal_inactive_cb
-
-    def pub_cam_cb(side, Tsgoal):
-        pub_T(cam_pose_publisher[side], Tsgoal)
-    teleopoperator.on_pub_cam = pub_cam_cb
     
     def pub_gripper_cb(side, gripper_open):
         arm_gripper_joint_command_publisher[side].publish(astra_controller_interfaces.msg.JointCommand(

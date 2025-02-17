@@ -95,6 +95,11 @@ def main(args=None):
         logger.info(f'ping: {msg.data}')
         arm_controller.write(struct.pack('>BBHHHHHHHH', arm_controller.COMM_HEAD, arm_controller.COMM_TYPE_PING, *msg.data))
     node.create_subscription(std_msgs.msg.UInt16MultiArray, 'ping', cb, rclpy.qos.qos_profile_sensor_data)
+    
+    def cb(msg: std_msgs.msg.Float32MultiArray):
+        logger.info(f'set_pid: {msg.data}')
+        arm_controller.set_pid(*msg.data)
+    node.create_subscription(std_msgs.msg.Float32MultiArray, 'set_pid', cb, rclpy.qos.qos_profile_sensor_data)
 
     try:
         rclpy.spin(node)
