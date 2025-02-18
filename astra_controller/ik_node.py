@@ -6,6 +6,7 @@ import rclpy.qos
 
 import geometry_msgs.msg
 import astra_controller_interfaces.msg
+import std_msgs.msg
 
 from ament_index_python import get_package_share_directory
 
@@ -64,6 +65,8 @@ def main(args=None):
 
     arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, "arm/joint_command", 10)
     lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, "lift/joint_command", 10)
+    
+    ik_failed_publisher = node.create_publisher(std_msgs.msg.Bool, "ik_failed", 10)
         
     def pub_theta(theta_list):
         msg = astra_controller_interfaces.msg.JointCommand(
@@ -130,6 +133,8 @@ def main(args=None):
 
             last_theta_list = theta_list
             return theta_list, True
+        
+        ik_failed_publisher.publish(std_msgs.msg.Bool(data=True))
         
         logger.warn('No valid pose could be found. Will not execute')
         return theta_list, False

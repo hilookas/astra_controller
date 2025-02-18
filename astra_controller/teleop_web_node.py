@@ -157,6 +157,21 @@ def main(args=None):
     node.create_subscription(sensor_msgs.msg.Image, 'left/cam_wrist/image_raw', get_cb("wrist_left"), qos_profile_sensor_data_reliable)
     node.create_subscription(sensor_msgs.msg.Image, 'right/cam_wrist/image_raw', get_cb("wrist_right"), qos_profile_sensor_data_reliable)
 
+    # Register IK Failed subscriptions
+    def cb(msg):
+        assert msg.data # True
+        teleopoperator.ik_failed_cb("left")
+    node.create_subscription(
+        std_msgs.msg.Bool, 'left/ik_failed', cb, rclpy.qos.qos_profile_sensor_data 
+    )
+    
+    def cb(msg):
+        assert msg.data # True
+        teleopoperator.ik_failed_cb("right")
+    node.create_subscription(
+        std_msgs.msg.Bool, 'right/ik_failed', cb, rclpy.qos.qos_profile_sensor_data 
+    )
+
     rclpy.spin(node)
     
     del teleopoperator
