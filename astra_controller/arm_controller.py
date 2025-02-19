@@ -23,6 +23,7 @@ class ArmController:
     COMM_TYPE_CONFIG_READ = 0x06
     COMM_TYPE_CONFIG_FEEDBACK = 0x07
     COMM_TYPE_PIDTUNE = 0x08
+    COMM_TYPE_INIT_JOINT = 0x09
 
     GRIPPER_GEAR_R = 0.027 / 2
 
@@ -72,6 +73,10 @@ class ArmController:
         
         self.set_torque(1)
         self.set_pid()
+        
+        # # set gripper mid
+        # self.write(struct.pack('>BBiiii', self.COMM_HEAD, self.COMM_TYPE_INIT_JOINT, 15, 1448, 0, 0)) # 1448 / 4096 * 2 * 3.14 * 0.027 / 2 == 0.030m == 30mm
+        # time.sleep(2)
 
         while self.last_position is None: # wait for init done
             time.sleep(0.1)
