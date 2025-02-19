@@ -25,6 +25,8 @@ from mr_urdf_loader import loadURDF
 from pathlib import Path
 from ament_index_python import get_package_share_directory
 
+from astra_controller.astra_controller import pq_from_ros_transform
+
 np.set_printoptions(precision=4, suppress=True)
 
 # See https://github.com/ros2/rmw/blob/rolling/rmw/include/rmw/qos_profiles.h
@@ -36,17 +38,6 @@ np.set_printoptions(precision=4, suppress=True)
 # see: https://blog.csdn.net/qq_38649880/article/details/105908598
 qos_profile_sensor_data_reliable = rclpy.qos.QoSProfile(**rclpy.impl.implementation_singleton.rclpy_implementation.rmw_qos_profile_t.predefined('qos_profile_sensor_data').to_dict())
 qos_profile_sensor_data_reliable.reliability = 1
-
-def pq_from_ros_transform(msg: geometry_msgs.msg.Transform):
-    return [
-        msg.translation.x,
-        msg.translation.y,
-        msg.translation.z,
-        msg.rotation.w,
-        msg.rotation.x,
-        msg.rotation.y,
-        msg.rotation.z
-    ]
 
 def main(args=None):
     rclpy.init(args=args)
@@ -151,7 +142,7 @@ def main(args=None):
             assert msg.encoding == "rgb8"
             assert msg.height == 360 and msg.width == 640
             image = np.asarray(msg.data).reshape(msg.height, msg.width, 3)
-            teleopoperator.webserver.track_feed(name, image)
+            teleopoperator.webserver.track_feed(name, (image, msg.header.stamp.sec, msg.header.stamp.nanosec))
         return cb
     node.create_subscription(sensor_msgs.msg.Image, 'cam_head/image_raw', get_cb("head"), qos_profile_sensor_data_reliable)
     node.create_subscription(sensor_msgs.msg.Image, 'left/cam_wrist/image_raw', get_cb("wrist_left"), qos_profile_sensor_data_reliable)
