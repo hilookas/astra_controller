@@ -6,8 +6,6 @@ import rclpy.action
 import sensor_msgs.msg
 import std_msgs.msg
 import astra_controller_interfaces.msg
-import astra_controller_interfaces.srv
-import threading
 import struct
 
 from .arm_controller import ArmController

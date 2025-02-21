@@ -38,6 +38,7 @@ setup(
             'arm_node = astra_controller.arm_node:main',
             'lift_node = astra_controller.lift_node:main',
             'base_node = astra_controller.base_node:main',
+            'head_node = astra_controller.head_node:main',
             'cam_node = astra_controller.cam_node:main',
         ],
     },

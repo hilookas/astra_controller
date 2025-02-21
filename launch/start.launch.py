@@ -211,6 +211,23 @@ def generate_launch_description():
         )
     )
     
+    # Head
+    ld.add_action(
+        Node(
+            package=package_name,
+            executable="head_node",
+            namespace='head',
+            parameters=[{
+                'device': '/dev/tty_head',
+            }],
+            remappings=[
+                ('joint_states', '/joint_states'),
+            ],
+            output='screen',
+            emulate_tty=True,
+        )
+    )
+    
     # Teleop (Web)
     ld.add_action(
         Node(

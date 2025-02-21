@@ -118,6 +118,15 @@ def main(args=None):
         ))
     teleopoperator.on_pub_gripper = pub_gripper_cb
 
+    head_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, "head/joint_command", 10)
+
+    def pub_head_cb(head_pan, head_tilt):
+        head_joint_command_publisher.publish(astra_controller_interfaces.msg.JointCommand(
+            name=["joint_head_pan", "joint_head_tilt"],
+            position_cmd=[head_pan, head_tilt]
+        ))
+    teleopoperator.on_pub_head = pub_head_cb
+
     cmd_vel_publisher = node.create_publisher(geometry_msgs.msg.Twist, 'cmd_vel', 10)
     def cmd_vel_cb(linear_vel, angular_vel):
         msg = geometry_msgs.msg.Twist()
