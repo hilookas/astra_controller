@@ -69,7 +69,7 @@ def main(args=None):
             actuated_joint_names=joint_names
         )
         
-        return mr.FKinBody(M, Slist, initial_joint_states)
+        return mr.FKinSpace(M, Slist, initial_joint_states)
     teleopoperator.on_get_initial_eef_pose = get_initial_eef_pose_cb
     
     def pub_T(pub: rclpy.publisher.Publisher, T, frame_id='base_link'):
