@@ -2,7 +2,7 @@ import rclpy
 import rclpy.node
 import rclpy.publisher
 
-from astra_teleop_web.teleoprator import Teleopoperator, INITIAL_LIFT_DISTANCE
+from astra_teleop_web.teleoprator import Teleopoperator
 
 import sensor_msgs.msg
 
@@ -57,16 +57,13 @@ def main(args=None):
         return Tsgoal
     teleopoperator.on_get_current_eef_pose = get_current_eef_pose_cb
     
-    def get_initial_eef_pose_cb(side):
-        joint_names = ["joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6" ] if side == "right" else ["joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6" ]
-        initial_joint_states = [INITIAL_LIFT_DISTANCE, -0.785, 0.785, 0, 0, 0] if side == "right" else [INITIAL_LIFT_DISTANCE, 0.785, -0.785, 0, 0, 0]
-
+    def get_initial_eef_pose_cb(side, initial_joint_states):
         urdf_name = str(Path(get_package_share_directory("astra_description")) / "urdf" / "astra_description_rel.urdf")
 
         M, Slist, Blist, Mlist, Glist, robot = loadURDF(
             urdf_name, 
             eef_link_name='link_ree_teleop' if side == "right" else 'link_lee_teleop', 
-            actuated_joint_names=joint_names
+            actuated_joint_names=["joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6" ] if side == "right" else ["joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6" ]
         )
         
         return mr.FKinSpace(M, Slist, initial_joint_states)
@@ -172,9 +169,11 @@ def main(args=None):
         std_msgs.msg.Bool, 'right/ik_failed', cb, rclpy.qos.qos_profile_sensor_data 
     )
 
-    rclpy.spin(node)
-    
-    del teleopoperator
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt as err:
+        teleopoperator.webserver.loop.stop()
+        raise err
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
