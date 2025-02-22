@@ -66,7 +66,7 @@ def main(args=None):
     arm_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, "arm/joint_command", 10)
     lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, "lift/joint_command", 10)
     
-    ik_failed_publisher = node.create_publisher(std_msgs.msg.Bool, "ik_failed", 10)
+    error_publisher = node.create_publisher(std_msgs.msg.String, "ik_error", 10)
         
     def pub_theta(theta_list):
         msg = astra_controller_interfaces.msg.JointCommand(
@@ -121,12 +121,12 @@ def main(args=None):
                     theta_list[i] = math.fmod(math.fmod(theta_list[i] + math.pi, 2*math.pi) + 2*math.pi, 2*math.pi) - math.pi
 
             # Check to make sure a solution was found and that no joint limits were violated
-            if not ((joint_limit_lower <= theta_list) & (theta_list <= joint_limit_upper)).all():
-                logger.warn('Guess over range.')
-                logger.warn('min: ' + str(joint_limit_lower))
-                logger.warn('before clip' + str(before_clip))
-                logger.warn('after clip' + str(theta_list))
-                logger.warn('max: ' + str(joint_limit_upper))
+            ok = True
+            for i, (p, mn, mx) in enumerate(zip(theta_list, joint_limit_lower, joint_limit_upper)):
+                if not (mn <= p <= mx):
+                    logger.error(f"Joint #{i+1} reach limit, min: {mn}, max: {mx}, current pos: {p}")
+                    ok = False
+            if not ok:
                 continue
             
             pub_theta(theta_list)
@@ -134,7 +134,7 @@ def main(args=None):
             last_theta_list = theta_list
             return theta_list, True
         
-        ik_failed_publisher.publish(std_msgs.msg.Bool(data=True))
+        error_publisher.publish(std_msgs.msg.String(data="IK failed"))
         
         logger.warn('No valid pose could be found. Will not execute')
         return theta_list, False

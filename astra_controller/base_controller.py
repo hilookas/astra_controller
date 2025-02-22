@@ -77,10 +77,8 @@ class BaseController:
 
         # if node_id == self.LEFT_NODE_ID:
         #     self.float0_publisher.publish(std_msgs.msg.Float32(data=pos))
-        #     self.float1_publisher.publish(std_msgs.msg.Float32(data=vel))
         # else:
         #     self.float2_publisher.publish(std_msgs.msg.Float32(data=pos))
-        #     self.float3_publisher.publish(std_msgs.msg.Float32(data=vel))
 
         this_time = time.time()
         with self.lock:
@@ -128,6 +126,9 @@ class BaseController:
         
         # Set gains
         drv.set_vel_gains(0.1, 0)
+        
+        drv.set_traj_vel_limit(20)
+        drv.set_traj_accel_limits(1, 1)
 
         # set control mode
         drv.set_axis_state_no_wait("CLOSED_LOOP_CONTROL")
@@ -159,6 +160,9 @@ class BaseController:
         with self.write_lock:
             self.setpoint[self.LEFT_NODE_ID] += left_vel * TIME_DELTA
             self.setpoint[self.RIGHT_NODE_ID] += right_vel * TIME_DELTA
+
+        # self.float1_publisher.publish(std_msgs.msg.Float32(data=self.setpoint[self.LEFT_NODE_ID]))
+        # self.float3_publisher.publish(std_msgs.msg.Float32(data=self.setpoint[self.RIGHT_NODE_ID]))
 
     def stop(self):
         if not self.quit.is_set():

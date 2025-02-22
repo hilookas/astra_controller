@@ -64,6 +64,11 @@ def main(args=None):
             data=data,
         ))
     arm_controller.pong_cb = cb
+
+    error_publisher = node.create_publisher(std_msgs.msg.String, 'error', 10)
+    def cb(data):
+        error_publisher.publish(std_msgs.msg.String(data=data))
+    arm_controller.error_cb = cb
     
     last_position_cmd = arm_controller.get_pos()[0]
     logger.info(f"using initial state {last_position_cmd}")

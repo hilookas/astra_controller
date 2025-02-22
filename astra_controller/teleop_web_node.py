@@ -57,16 +57,20 @@ def main(args=None):
         return Tsgoal
     teleopoperator.on_get_current_eef_pose = get_current_eef_pose_cb
     
-    def get_initial_eef_pose_cb(side, initial_joint_states):
+    M = {}
+    Slist = {}
+    
+    for side in ["left", "right"]:
         urdf_name = str(Path(get_package_share_directory("astra_description")) / "urdf" / "astra_description_rel.urdf")
 
-        M, Slist, Blist, Mlist, Glist, robot = loadURDF(
+        M[side], Slist[side], _, _, _, _ = loadURDF(
             urdf_name, 
             eef_link_name='link_ree_teleop' if side == "right" else 'link_lee_teleop', 
             actuated_joint_names=["joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6" ] if side == "right" else ["joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6" ]
         )
-        
-        return mr.FKinSpace(M, Slist, initial_joint_states)
+
+    def get_initial_eef_pose_cb(side, initial_joint_states):
+        return mr.FKinSpace(M[side], Slist[side], initial_joint_states)
     teleopoperator.on_get_initial_eef_pose = get_initial_eef_pose_cb
     
     def pub_T(pub: rclpy.publisher.Publisher, T, frame_id='base_link'):
@@ -156,17 +160,27 @@ def main(args=None):
 
     # Register IK Failed subscriptions
     def cb(msg):
-        assert msg.data # True
-        teleopoperator.ik_failed_cb("left")
+        teleopoperator.error_cb(f"[IK Left]\n{msg.data}")
     node.create_subscription(
-        std_msgs.msg.Bool, 'left/ik_failed', cb, rclpy.qos.qos_profile_sensor_data 
+        std_msgs.msg.String, 'left/ik_error', cb, rclpy.qos.qos_profile_sensor_data 
     )
     
     def cb(msg):
-        assert msg.data # True
-        teleopoperator.ik_failed_cb("right")
+        teleopoperator.error_cb(f"[IK Right]\n{msg.data}")
     node.create_subscription(
-        std_msgs.msg.Bool, 'right/ik_failed', cb, rclpy.qos.qos_profile_sensor_data 
+        std_msgs.msg.String, 'right/ik_error', cb, rclpy.qos.qos_profile_sensor_data 
+    )
+    
+    def cb(msg):
+        teleopoperator.error_cb(f"[Arm Left]\n{msg.data}")
+    node.create_subscription(
+        std_msgs.msg.String, 'left/arm/error', cb, rclpy.qos.qos_profile_sensor_data 
+    )
+    
+    def cb(msg):
+        teleopoperator.error_cb(f"[Arm Right]\n{msg.data}")
+    node.create_subscription(
+        std_msgs.msg.String, 'right/arm/error', cb, rclpy.qos.qos_profile_sensor_data 
     )
 
     try:

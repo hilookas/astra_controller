@@ -65,6 +65,8 @@ class ArmController:
         self.config_cb_lock = threading.Lock()
         
         self.debug_cb = None
+        
+        self.error_cb = None
 
         self.quit = threading.Event()
         
@@ -164,16 +166,21 @@ class ArmController:
         with self.write_lock:
             self.ser.write(encoded_data)
 
-    JOINT_MIN = np.array([-math.pi/2, -math.pi/2, -math.pi*0.75, -math.pi/2, -math.pi*0.75, -math.pi/2])
-    JOINT_MAX = np.array([math.pi/2, math.pi/2, math.pi*0.75, math.pi/2, math.pi*0.75, math.pi/2])
+    JOINT_MIN = np.array([-math.pi/2, -math.pi/2, -math.pi*0.999, -math.pi/2, -math.pi*0.875, -math.pi/2])
+    JOINT_MAX = np.array([math.pi/2, math.pi/2, math.pi*0.999, math.pi/2, math.pi*0.875, math.pi/2])
 
     def set_pos(self, pos):
-        pos_protected = np.minimum(np.maximum(np.array(pos), self.JOINT_MIN), self.JOINT_MAX)
-        if all(np.isclose(pos, pos_protected, atol=0.01)):
+        ok = True
+        for i, (p, mn, mx) in enumerate(zip(pos, self.JOINT_MIN, self.JOINT_MAX)):
+            if not (mn <= p <= mx):
+                logger.error(f"Joint #{i+2} reach limit, min: {mn}, max: {mx}, current pos: {p}")
+                if self.error_cb is not None:
+                    self.error_cb(f"Joint #{i+2} reach limit")
+                # pos[i] = np.clip(pos[i], mn, mx)
+                ok = False
+        if ok:
             self.write(struct.pack('>BBHHHHHHxxxx', self.COMM_HEAD, self.COMM_TYPE_CTRL, *self.to_raw_unit(pos)))
-        else:
-            logger.error(f"Arm reach min/max!!! {pos} {pos_protected}")
-
+    
     def set_torque(self, torque):
         self.write(struct.pack('>BBBxxxxxxxxxxxxxxx', self.COMM_HEAD, self.COMM_TYPE_TORQUE, torque))
         
