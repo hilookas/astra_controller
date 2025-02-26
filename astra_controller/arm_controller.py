@@ -79,13 +79,15 @@ class ArmController:
         # # set gripper mid
         # self.write(struct.pack('>BBiiii', self.COMM_HEAD, self.COMM_TYPE_INIT_JOINT, 15, 1448, 0, 0)) # 1448 / 4096 * 2 * 3.14 * 0.027 / 2 == 0.030m == 30mm
         # time.sleep(2)
+        # exit()
 
         while self.last_position is None: # wait for init done
             time.sleep(0.1)
     
     # def set_pid(self, p=10.0, i=7.0, d=20.0, i_max=800, i_clip_thres=10.0, i_clip_coef=0.5):
-    def set_pid(self, p=8.0, i=0.5, d=0, i_max=100, i_clip_thres=100000.0, i_clip_coef=1):
-        self.write(struct.pack('>BBffffffff', self.COMM_HEAD, self.COMM_TYPE_PIDTUNE, *[p, i, d, i_clip_thres, i_clip_coef, i_max, 0, 0]))
+    # def set_pid(self, p=8.0, i=0.5, d=0, i_max=100, i_clip_thres=100000.0, i_clip_coef=1):
+    def set_pid(self, p=30, i=0, d=0, i_max=800, p2=10, p2_err_thres=2, i_clip_thres=100000.0, i_clip_coef=1):
+        self.write(struct.pack('>BBffffffff', self.COMM_HEAD, self.COMM_TYPE_PIDTUNE, *[p, i, d, i_clip_thres, i_clip_coef, i_max, p2, p2_err_thres]))
     
     @staticmethod
     def checksum(data: bytes):

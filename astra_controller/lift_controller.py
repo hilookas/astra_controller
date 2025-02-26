@@ -20,7 +20,7 @@ class LiftController:
 
     STEPPER_PULSE_PER_REV = 800 # pulse/rev
     RAIL_MM_PER_REV = 75 # mm/rev
-    RAIL_MAX_LENGTH_MM = 1100
+    RAIL_MAX_LENGTH_MM = 1190
     STEPPER_MAX_PULSE = (RAIL_MAX_LENGTH_MM / RAIL_MM_PER_REV * STEPPER_PULSE_PER_REV) # 80000
 
     @staticmethod
