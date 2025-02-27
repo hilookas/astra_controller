@@ -9,14 +9,6 @@ import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# import rclpy
-# import rclpy.node
-# import rclpy.qos
-# import rclpy.action
-
-# import std_msgs.msg
-# import math
-
 class BaseController:
     LEFT_NODE_ID = 0
     RIGHT_NODE_ID = 1
@@ -28,15 +20,10 @@ class BaseController:
     WHEEL_D = 0.139 # in [m]
 
     def __init__(self, name):
-        # node = rclpy.node.Node('base_node')
-        # self.float0_publisher = node.create_publisher(std_msgs.msg.Float32, "/float0", 10)
-        # self.float1_publisher = node.create_publisher(std_msgs.msg.Float32, "/float1", 10)
-        # self.float2_publisher = node.create_publisher(std_msgs.msg.Float32, "/float2", 10)
-        # self.float3_publisher = node.create_publisher(std_msgs.msg.Float32, "/float3", 10)
-        
         logger.info(f"Using device {name}")
 
         self.state_cb = None
+        self.debug_cb = None
 
         self.device_name = name
 
@@ -48,7 +35,12 @@ class BaseController:
 
         self.write_lock = threading.Lock()
 
-        self.setpoint = {
+        self.curpos = {
+            self.LEFT_NODE_ID: 0,
+            self.RIGHT_NODE_ID: 0
+        }
+
+        self.setpos = {
             self.LEFT_NODE_ID: 0,
             self.RIGHT_NODE_ID: 0
         }
@@ -74,11 +66,15 @@ class BaseController:
         pos, vel = msg.data['Pos_Estimate'], msg.data['Vel_Estimate']
 
         logging.debug(f"[Node #{node_id}] pos: {pos:.3f} [turns], vel: {vel:.3f} [turns/s]")
+        
+        self.curpos[node_id] = pos
 
-        # if node_id == self.LEFT_NODE_ID:
-        #     self.float0_publisher.publish(std_msgs.msg.Float32(data=pos))
-        # else:
-        #     self.float2_publisher.publish(std_msgs.msg.Float32(data=pos))
+        if node_id == self.LEFT_NODE_ID:
+            if self.debug_cb is not None:
+                self.debug_cb("curpos_left", pos)
+        else:
+            if self.debug_cb is not None:
+                self.debug_cb("curpos_right", pos)
 
         this_time = time.time()
         with self.lock:
@@ -145,7 +141,7 @@ class BaseController:
                 if self.quit.is_set():
                     raise Exception("quit")
                 with self.write_lock:
-                    drv.set_input_pos(self.setpoint[node_id])
+                    drv.set_input_pos(self.setpos[node_id])
                 drv.check_errors()
                 await asyncio.sleep(0.1)
         finally:
@@ -156,13 +152,29 @@ class BaseController:
         right_vel = (linear_vel + angular_vel * self.WHEEL_BASE / 2) / (math.pi * self.WHEEL_D) * self.RIGHT_INSTALL_DIR
         
         TIME_DELTA = 0.1 # TODO Better solution
+        MAX_POS_DIFF_IN_TURNS = 2
 
         with self.write_lock:
-            self.setpoint[self.LEFT_NODE_ID] += left_vel * TIME_DELTA
-            self.setpoint[self.RIGHT_NODE_ID] += right_vel * TIME_DELTA
+            self.setpos[self.LEFT_NODE_ID] += left_vel * TIME_DELTA
+            self.setpos[self.RIGHT_NODE_ID] += right_vel * TIME_DELTA
+            
+            if self.setpos[self.LEFT_NODE_ID] > self.curpos[self.LEFT_NODE_ID] + MAX_POS_DIFF_IN_TURNS:
+                self.setpos[self.LEFT_NODE_ID] = self.curpos[self.LEFT_NODE_ID] + MAX_POS_DIFF_IN_TURNS
+                logger.info(f"Left setpos clamped to {self.setpos[self.LEFT_NODE_ID]}")
+            if self.setpos[self.LEFT_NODE_ID] < self.curpos[self.LEFT_NODE_ID] - MAX_POS_DIFF_IN_TURNS:
+                self.setpos[self.LEFT_NODE_ID] = self.curpos[self.LEFT_NODE_ID] - MAX_POS_DIFF_IN_TURNS
+                logger.info(f"Left setpos clamped to {self.setpos[self.LEFT_NODE_ID]}")
+            if self.setpos[self.RIGHT_NODE_ID] > self.curpos[self.RIGHT_NODE_ID] + MAX_POS_DIFF_IN_TURNS:
+                self.setpos[self.RIGHT_NODE_ID] = self.curpos[self.RIGHT_NODE_ID] + MAX_POS_DIFF_IN_TURNS
+                logger.info(f"Right setpos clamped to {self.setpos[self.RIGHT_NODE_ID]}")
+            if self.setpos[self.RIGHT_NODE_ID] < self.curpos[self.RIGHT_NODE_ID] - MAX_POS_DIFF_IN_TURNS:
+                self.setpos[self.RIGHT_NODE_ID] = self.curpos[self.RIGHT_NODE_ID] - MAX_POS_DIFF_IN_TURNS
+                logger.info(f"Right setpos clamped to {self.setpos[self.RIGHT_NODE_ID]}")
 
-        # self.float1_publisher.publish(std_msgs.msg.Float32(data=self.setpoint[self.LEFT_NODE_ID]))
-        # self.float3_publisher.publish(std_msgs.msg.Float32(data=self.setpoint[self.RIGHT_NODE_ID]))
+        if self.debug_cb is not None:
+            self.debug_cb("setpos_left", self.setpos[self.LEFT_NODE_ID])
+        if self.debug_cb is not None:
+            self.debug_cb("setpos_right", self.setpos[self.RIGHT_NODE_ID])
 
     def stop(self):
         if not self.quit.is_set():

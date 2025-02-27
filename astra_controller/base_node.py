@@ -5,6 +5,7 @@ import rclpy.action
 
 import nav_msgs.msg
 import geometry_msgs.msg
+import std_msgs.msg
 import tf2_ros
 import math
 
@@ -81,6 +82,18 @@ def main(args=None):
     def cb(msg: geometry_msgs.msg.Twist):
         base_controller.set_vel(msg.linear.x, msg.angular.z)
     node.create_subscription(geometry_msgs.msg.Twist, 'cmd_vel', cb, rclpy.qos.qos_profile_sensor_data)
+    
+    debug_publishers = {}
+    debug_publishers["curpos_left"] = node.create_publisher(std_msgs.msg.Float32, "base/debug/curpos_left", 10)
+    debug_publishers["curpos_right"] = node.create_publisher(std_msgs.msg.Float32, "base/debug/curpos_right", 10)
+    debug_publishers["setpos_left"] = node.create_publisher(std_msgs.msg.Float32, "base/debug/setpos_left", 10)
+    debug_publishers["setpos_right"] = node.create_publisher(std_msgs.msg.Float32, "base/debug/setpos_right", 10)
+    def debug_cb(name, value):
+        assert name in debug_publishers
+        msg = std_msgs.msg.Float32()
+        msg.data = value
+        debug_publishers[name].publish(msg)
+    base_controller.debug_cb = debug_cb
 
     try:
         rclpy.spin(node)
