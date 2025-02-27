@@ -93,7 +93,7 @@ class HeadController:
                 assert(len(data) == self.COMM_LEN)
 
                 if data[1] == self.COMM_TYPE_PONG:
-                    if self.state_cb is not None:
+                    if self.pong_cb is not None:
                         self.pong_cb(struct.unpack('>HHxxxxxxxxxxxx', data[2:]))
                 elif data[1] == self.COMM_TYPE_FEEDBACK:
                     position = self.to_si_unit(np.array(struct.unpack('>HHxxxxxxxxxxxx', data[2:])))

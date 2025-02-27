@@ -98,10 +98,10 @@ class AstraController:
             try:
                 if "joint_l6" in msg.name:
                     T_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_lee_teleop', rclpy.time.Time())
-                    self.joint_commands["eef_l"] = pq_from_ros_transform(T_msg.transform)
+                    self.joint_states["eef_l"] = pq_from_ros_transform(T_msg.transform)
                 if "joint_r6" in msg.name:
                     T_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_ree_teleop', rclpy.time.Time())
-                    self.joint_commands["eef_r"] = pq_from_ros_transform(T_msg.transform)
+                    self.joint_states["eef_r"] = pq_from_ros_transform(T_msg.transform)
             except tf2.LookupException:
                 pass
             except tf2.ConnectivityException:
@@ -125,6 +125,7 @@ class AstraController:
         node.create_subscription(astra_controller_interfaces.msg.JointCommand, "right/lift/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
         node.create_subscription(astra_controller_interfaces.msg.JointCommand, "right/arm/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
         node.create_subscription(astra_controller_interfaces.msg.JointCommand, "right/arm/gripper_joint_command", cb, rclpy.qos.qos_profile_sensor_data)
+        node.create_subscription(astra_controller_interfaces.msg.JointCommand, "head/joint_command", cb, rclpy.qos.qos_profile_sensor_data)
         
         def get_cb(name):
             def cb(msg: geometry_msgs.msg.PoseStamped):
@@ -146,6 +147,8 @@ class AstraController:
         self.right_lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, f"right/lift/joint_command", 10)
         self.right_arm_gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, f"right/arm/gripper_joint_command", 10)
         
+        self.head_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, f"head/joint_command", 10)
+        
         self.left_goal_pose_publisher = node.create_publisher(geometry_msgs.msg.PoseStamped, f"left/goal_pose", 10)
         self.right_goal_pose_publisher = node.create_publisher(geometry_msgs.msg.PoseStamped, f"right/goal_pose", 10)
         
@@ -166,6 +169,7 @@ class AstraController:
         self.joint_states = {
             "joint_l1": 0.0, "joint_l2": 0.0, "joint_l3": 0.0, "joint_l4": 0.0, "joint_l5": 0.0, "joint_l6": 0.0, "joint_l7r": 0.0,
             "joint_r1": 0.0, "joint_r2": 0.0, "joint_r3": 0.0, "joint_r4": 0.0, "joint_r5": 0.0, "joint_r6": 0.0, "joint_r7r": 0.0,
+            "joint_head_pan": 0.0, "joint_head_tilt": 0.0,
             "twist_linear": 0.0, "twist_angular": 0.0, 
             "eef_l": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "eef_r": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             "odom": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -174,6 +178,7 @@ class AstraController:
         self.joint_commands = {
             "joint_l1": 0.0, "joint_l2": 0.0, "joint_l3": 0.0, "joint_l4": 0.0, "joint_l5": 0.0, "joint_l6": 0.0, "joint_l7r": 0.0,
             "joint_r1": 0.0, "joint_r2": 0.0, "joint_r3": 0.0, "joint_r4": 0.0, "joint_r5": 0.0, "joint_r6": 0.0, "joint_r7r": 0.0,
+            "joint_head_pan": 0.0, "joint_head_tilt": 0.0,
             "twist_linear": 0.0, "twist_angular": 0.0, 
             "eef_l": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "eef_r": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         }
@@ -198,12 +203,14 @@ class AstraController:
                 "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
                 "joint_r7r",
                 "twist_linear", "twist_angular", 
+                "joint_head_pan", "joint_head_tilt",
             ]]
         elif self.space == 'cartesian':
             return self.joint_commands["eef_l"] + self.joint_commands["eef_r"] + [self.joint_commands[key] for key in [
                 "joint_l7r",
                 "joint_r7r",
                 "twist_linear", "twist_angular", 
+                "joint_head_pan", "joint_head_tilt",
             ]]
         elif self.space == 'both': # both
             return [self.joint_commands[key] for key in [
@@ -216,7 +223,9 @@ class AstraController:
                 "joint_r7r",
             ]], [self.joint_commands[key] for key in [
                 "twist_linear", "twist_angular", 
-            ]], self.joint_commands["eef_l"], self.joint_commands["eef_r"]
+            ]], self.joint_commands["eef_l"], self.joint_commands["eef_r"], [self.joint_commands[key] for key in [
+                "joint_head_pan", "joint_head_tilt",
+            ]]
         else:
             raise Exception("Specify data space!")
     
@@ -228,12 +237,14 @@ class AstraController:
                 "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
                 "joint_r7r",
                 "twist_linear", "twist_angular", 
+                "joint_head_pan", "joint_head_tilt",
             ]]
         elif self.space == 'cartesian':
             return self.joint_states["eef_l"] + self.joint_states["eef_r"] + [self.joint_states[key] for key in [
                 "joint_l7r",
                 "joint_r7r",
                 "twist_linear", "twist_angular", 
+                "joint_head_pan", "joint_head_tilt",
             ]]
         elif self.space == 'both': # both
             return [self.joint_states[key] for key in [
@@ -246,7 +257,9 @@ class AstraController:
                 "joint_r7r",
             ]], [self.joint_states[key] for key in [
                 "twist_linear", "twist_angular", 
-            ]], self.joint_states["eef_l"], self.joint_states["eef_r"], self.joint_states["odom"]
+            ]], self.joint_states["eef_l"], self.joint_states["eef_r"], self.joint_states["odom"], [self.joint_states[key] for key in [
+                "joint_head_pan", "joint_head_tilt",
+            ]]
         else:
             raise Exception("Specify data space!")
         
@@ -259,6 +272,7 @@ class AstraController:
                 "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
                 "joint_r7r",
                 "twist_linear", "twist_angular", 
+                "joint_head_pan", "joint_head_tilt",
             ], goal_pos)))
         
             self.left_arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointCommand(
@@ -290,6 +304,11 @@ class AstraController:
             self.right_arm_gripper_joint_command_publisher.publish(astra_controller_interfaces.msg.JointCommand(
                 name=[ "joint_r7r", ],
                 position_cmd=[joint_commands[key] for key in [ "joint_r7r", ]]
+            ))
+            
+            self.head_joint_command_publisher.publish(astra_controller_interfaces.msg.JointCommand(
+                name=[ "joint_head_pan", "joint_head_tilt", ],
+                position_cmd=[joint_commands[key] for key in [ "joint_head_pan", "joint_head_tilt", ]]
             ))
             
             msg = geometry_msgs.msg.Twist()
