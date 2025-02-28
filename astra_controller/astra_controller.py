@@ -50,7 +50,7 @@ def pq_from_ros_transform(msg: geometry_msgs.msg.Transform):
     ]
 
 class AstraController:
-    def __init__(self, space="both"):
+    def __init__(self, space=None):
         rclpy.init()
         
         self.space = space
@@ -196,8 +196,8 @@ class AstraController:
         print("disconnect")
         
     def read_leader_present_position(self):
-        if self.space == 'joint':
-            return [self.joint_commands[key] for key in [
+        if self.space == "joint":
+            action = [self.joint_commands[key] for key in [
                 "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
                 "joint_l7r",
                 "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
@@ -205,33 +205,33 @@ class AstraController:
                 "twist_linear", "twist_angular", 
                 "joint_head_pan", "joint_head_tilt",
             ]]
-        elif self.space == 'cartesian':
-            return self.joint_commands["eef_l"] + self.joint_commands["eef_r"] + [self.joint_commands[key] for key in [
+        elif self.space == "cartesian":
+            action = self.joint_commands["eef_l"] + self.joint_commands["eef_r"] + [self.joint_commands[key] for key in [
                 "joint_l7r",
                 "joint_r7r",
                 "twist_linear", "twist_angular", 
-                "joint_head_pan", "joint_head_tilt",
-            ]]
-        elif self.space == 'both': # both
-            return [self.joint_commands[key] for key in [
-                "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
-            ]], [self.joint_commands[key] for key in [
-                "joint_l7r",
-            ]], [self.joint_commands[key] for key in [
-                "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
-            ]], [self.joint_commands[key] for key in [
-                "joint_r7r",
-            ]], [self.joint_commands[key] for key in [
-                "twist_linear", "twist_angular", 
-            ]], self.joint_commands["eef_l"], self.joint_commands["eef_r"], [self.joint_commands[key] for key in [
                 "joint_head_pan", "joint_head_tilt",
             ]]
         else:
-            raise Exception("Specify data space!")
+            action = None
+
+        return action, [self.joint_commands[key] for key in [
+            "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
+        ]], [self.joint_commands[key] for key in [
+            "joint_l7r",
+        ]], [self.joint_commands[key] for key in [
+            "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
+        ]], [self.joint_commands[key] for key in [
+            "joint_r7r",
+        ]], [self.joint_commands[key] for key in [
+            "twist_linear", "twist_angular", 
+        ]], self.joint_commands["eef_l"], self.joint_commands["eef_r"], [self.joint_commands[key] for key in [
+            "joint_head_pan", "joint_head_tilt",
+        ]]
     
     def read_present_position(self):
-        if self.space == 'joint':
-            return [self.joint_states[key] for key in [
+        if self.space == "joint":
+            observation = [self.joint_states[key] for key in [
                 "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
                 "joint_l7r",
                 "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
@@ -239,32 +239,32 @@ class AstraController:
                 "twist_linear", "twist_angular", 
                 "joint_head_pan", "joint_head_tilt",
             ]]
-        elif self.space == 'cartesian':
-            return self.joint_states["eef_l"] + self.joint_states["eef_r"] + [self.joint_states[key] for key in [
+        elif self.space == "cartesian":
+            observation = self.joint_states["eef_l"] + self.joint_states["eef_r"] + [self.joint_states[key] for key in [
                 "joint_l7r",
                 "joint_r7r",
                 "twist_linear", "twist_angular", 
-                "joint_head_pan", "joint_head_tilt",
-            ]]
-        elif self.space == 'both': # both
-            return [self.joint_states[key] for key in [
-                "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
-            ]], [self.joint_states[key] for key in [
-                "joint_l7r",
-            ]], [self.joint_states[key] for key in [
-                "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
-            ]], [self.joint_states[key] for key in [
-                "joint_r7r",
-            ]], [self.joint_states[key] for key in [
-                "twist_linear", "twist_angular", 
-            ]], self.joint_states["eef_l"], self.joint_states["eef_r"], self.joint_states["odom"], [self.joint_states[key] for key in [
                 "joint_head_pan", "joint_head_tilt",
             ]]
         else:
-            raise Exception("Specify data space!")
+            observation = None
+        
+        return observation, [self.joint_states[key] for key in [
+            "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
+        ]], [self.joint_states[key] for key in [
+            "joint_l7r",
+        ]], [self.joint_states[key] for key in [
+            "joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6",
+        ]], [self.joint_states[key] for key in [
+            "joint_r7r",
+        ]], [self.joint_states[key] for key in [
+            "twist_linear", "twist_angular", 
+        ]], self.joint_states["eef_l"], self.joint_states["eef_r"], self.joint_states["odom"], [self.joint_states[key] for key in [
+            "joint_head_pan", "joint_head_tilt",
+        ]]
         
     def write_goal_position(self, goal_pos: list[float]): # TODO support IK mode
-        if self.space == 'joint':
+        if self.space == "joint":
             joint_commands = {}
             joint_commands.update(dict(zip([
                 "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
@@ -290,7 +290,6 @@ class AstraController:
                 position_cmd=[joint_commands[key] for key in [ "joint_l7r", ]]
             ))
             
-
             self.right_arm_joint_command_publisher.publish(astra_controller_interfaces.msg.JointCommand(
                 name=[ "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6", ],
                 position_cmd=[joint_commands[key] for key in [ "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6", ]]
@@ -315,8 +314,10 @@ class AstraController:
             msg.linear.x = joint_commands["twist_linear"]
             msg.angular.z = joint_commands["twist_angular"]
             self.cmd_vel_publisher.publish(msg)
+        elif self.space == "cartesian":
+            raise NotImplementedError("Cartesian space is not supported for now")
         else:
-            raise Exception("Not implemented!")
+            raise Exception("Give a space to the AstraController!")
         
     def read_cameras(self):
         return self.images

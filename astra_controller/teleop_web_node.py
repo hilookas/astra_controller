@@ -52,12 +52,7 @@ def main(args=None):
     tf_listener = TransformListener(tf_buffer, node)
     
     def get_current_eef_pose_cb(side):
-        while rclpy.ok():
-            try:
-                Tsgoal_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_ree_teleop' if side == "right" else 'link_lee_teleop', rclpy.time.Time())
-                break
-            except Exception as e:
-                logger.warn(str(e))
+        Tsgoal_msg: geometry_msgs.msg.TransformStamped = tf_buffer.lookup_transform('base_link', 'link_ree_teleop' if side == "right" else 'link_lee_teleop', rclpy.time.Time())
         Tsgoal = pt.transform_from_pq(np.array(pq_from_ros_transform(Tsgoal_msg.transform)))
         return Tsgoal
     teleopoperator.on_get_current_eef_pose = get_current_eef_pose_cb
