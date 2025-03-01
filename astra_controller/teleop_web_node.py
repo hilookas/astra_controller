@@ -182,6 +182,18 @@ def main(args=None):
     node.create_subscription(
         std_msgs.msg.String, 'right/arm/error', cb, rclpy.qos.qos_profile_sensor_data 
     )
+    
+    def cb(msg):
+        teleopoperator.error_cb(f"[Lift Left]\n{msg.data}")
+    node.create_subscription(
+        std_msgs.msg.String, 'left/lift/error', cb, rclpy.qos.qos_profile_sensor_data 
+    )
+    
+    def cb(msg):
+        teleopoperator.error_cb(f"[Lift Right]\n{msg.data}")
+    node.create_subscription(
+        std_msgs.msg.String, 'right/lift/error', cb, rclpy.qos.qos_profile_sensor_data 
+    )
 
     try:
         rclpy.spin(node)

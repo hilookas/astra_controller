@@ -107,11 +107,12 @@ class LiftController:
             self.ser.write(encoded_data)
 
     def set_pos(self, pos):
-        pos_protected = np.minimum(np.maximum(pos, 0), (self.RAIL_MAX_LENGTH_MM / 1000))
-        if np.isclose(pos, pos_protected, atol=0.01):
-            self.write(struct.pack('>BBIxxxxxxxxxxxx', self.COMM_HEAD, self.COMM_TYPE_CTRL, self.to_raw_unit(pos)))
+        if not (0 <= pos <= self.RAIL_MAX_LENGTH_MM / 1000):
+            logger.error(f"Joint #{1} reach limit, min: {0}, max: {self.RAIL_MAX_LENGTH_MM / 1000}, current pos: {pos}")
+            if self.error_cb is not None:
+                self.error_cb(f"Joint #{1} reach limit")
         else:
-            logger.error(f"Arm reach min/max!!! {pos} {pos_protected}")
+            self.write(struct.pack('>BBIxxxxxxxxxxxx', self.COMM_HEAD, self.COMM_TYPE_CTRL, self.to_raw_unit(pos)))
 
     def stop(self):
         if not self.quit.is_set():

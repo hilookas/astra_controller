@@ -6,6 +6,7 @@ import rclpy.action
 import sensor_msgs.msg
 import astra_controller_interfaces.msg
 import astra_controller_interfaces.srv
+import std_msgs.msg
 
 from .lift_controller import LiftController
 
@@ -36,6 +37,11 @@ def main(args=None):
         msg.effort = [ float(effort) ]
         joint_state_publisher.publish(msg)
     lift_controller.state_cb = cb
+
+    error_publisher = node.create_publisher(std_msgs.msg.String, 'error', 10)
+    def cb(data):
+        error_publisher.publish(std_msgs.msg.String(data=data))
+    lift_controller.error_cb = cb
     
     def cb(msg: astra_controller_interfaces.msg.JointCommand):
         assert msg.name == joint_names
