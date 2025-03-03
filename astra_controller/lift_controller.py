@@ -48,6 +48,8 @@ class LiftController:
         self.last_time = None
 
         self.write_lock = threading.Lock()
+        
+        self.error_cb = None
 
         self.quit = threading.Event()
 
@@ -91,10 +93,9 @@ class LiftController:
                         if self.state_cb is not None:
                             self.state_cb(self.last_position, self.last_velocity, self.last_effort, self.last_time)
                 else:
-                    sys.stdout.buffer.write(data)
-                    sys.stdout.flush()
-        # except Exception:
-        #     pass
+                    # sys.stdout.buffer.write(data)
+                    # sys.stdout.flush()
+                    pass
         finally:
             logger.info("thread exiting")
 

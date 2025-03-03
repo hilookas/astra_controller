@@ -161,33 +161,60 @@ class AstraController:
         self.done = False
 
         self.images = {
-            "head": np.zeros((360, 640, 3), np.uint8),
-            "wrist_left": np.zeros((360, 640, 3), np.uint8),
-            "wrist_right": np.zeros((360, 640, 3), np.uint8)
+            "head": None, # np.zeros((360, 640, 3), np.uint8),
+            "wrist_left": None, # np.zeros((360, 640, 3), np.uint8),
+            "wrist_right": None, # np.zeros((360, 640, 3), np.uint8)
         }
         
         self.joint_states = {
-            "joint_l1": 0.0, "joint_l2": 0.0, "joint_l3": 0.0, "joint_l4": 0.0, "joint_l5": 0.0, "joint_l6": 0.0, "joint_l7r": 0.0,
-            "joint_r1": 0.0, "joint_r2": 0.0, "joint_r3": 0.0, "joint_r4": 0.0, "joint_r5": 0.0, "joint_r6": 0.0, "joint_r7r": 0.0,
-            "joint_head_pan": 0.0, "joint_head_tilt": 0.0,
-            "twist_linear": 0.0, "twist_angular": 0.0, 
-            "eef_l": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "eef_r": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            "odom": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "joint_l1": None, "joint_l2": None, "joint_l3": None, "joint_l4": None, "joint_l5": None, "joint_l6": None, "joint_l7r": None,
+            "joint_r1": None, "joint_r2": None, "joint_r3": None, "joint_r4": None, "joint_r5": None, "joint_r6": None, "joint_r7r": None,
+            "joint_head_pan": None, "joint_head_tilt": None,
+            "twist_linear": None, "twist_angular": None, 
+            "eef_l": None, # [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "eef_r": None, # [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "odom": None, # [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         }
         
         self.joint_commands = {
-            "joint_l1": 0.0, "joint_l2": 0.0, "joint_l3": 0.0, "joint_l4": 0.0, "joint_l5": 0.0, "joint_l6": 0.0, "joint_l7r": 0.0,
-            "joint_r1": 0.0, "joint_r2": 0.0, "joint_r3": 0.0, "joint_r4": 0.0, "joint_r5": 0.0, "joint_r6": 0.0, "joint_r7r": 0.0,
-            "joint_head_pan": 0.0, "joint_head_tilt": 0.0,
-            "twist_linear": 0.0, "twist_angular": 0.0, 
-            "eef_l": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "eef_r": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "joint_l1": None, "joint_l2": None, "joint_l3": None, "joint_l4": None, "joint_l5": None, "joint_l6": None, "joint_l7r": None,
+            "joint_r1": None, "joint_r2": None, "joint_r3": None, "joint_r4": None, "joint_r5": None, "joint_r6": None, "joint_r7r": None,
+            "joint_head_pan": None, "joint_head_tilt": None,
+            "twist_linear": None, "twist_angular": None, 
+            "eef_l": None, # [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "eef_r": None, # [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         }
     
+    def states_ready(self):
+        for k, v in self.images.items():
+            if v is None:
+                print(f"Waiting for image {k} to be ready")
+                return False
+        
+        for k, v in self.joint_states.items():
+            if v is None:
+                print(f"Waiting for state {k} to be ready")
+                return False
+        
+        return True
+    
+    def commands_ready(self):
+        for k, v in self.joint_commands.items():
+            if v is None:
+                print(f"Waiting for command {k} to be ready")
+                return False
+        
+        return True
+
     def wait_for_reset(self):
         print("Waiting for reset")
         while not self.reset:
-            time.sleep(0.5)
+            time.sleep(0.1)
+        
         self.reset_buf()
+        
+        while not self.states_ready():
+            time.sleep(0.1)
         
     def connect(self):            
         print("connected")
@@ -196,6 +223,9 @@ class AstraController:
         print("disconnect")
         
     def read_leader_present_position(self):
+        while not self.commands_ready():
+            time.sleep(0.1)
+
         if self.space == "joint":
             action = [self.joint_commands[key] for key in [
                 "joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6",
@@ -313,7 +343,7 @@ class AstraController:
             msg = geometry_msgs.msg.Twist()
             msg.linear.x = joint_commands["twist_linear"]
             msg.angular.z = joint_commands["twist_angular"]
-            self.cmd_vel_publisher.publish(msg)
+            # self.cmd_vel_publisher.publish(msg)
         elif self.space == "cartesian":
             raise NotImplementedError("Cartesian space is not supported for now")
         else:
