@@ -23,7 +23,6 @@ class ArmController:
     COMM_TYPE_CONFIG_READ = 0x06
     COMM_TYPE_CONFIG_FEEDBACK = 0x07
     COMM_TYPE_PIDTUNE = 0x08
-    COMM_TYPE_INIT_JOINT = 0x09
 
     GRIPPER_GEAR_R = 0.027 / 2
 
@@ -43,7 +42,7 @@ class ArmController:
         arr = (-np.array(arr) / (2*math.pi) * 4096 + 2048).astype(int)
         return arr
 
-    def __init__(self, name):
+    def __init__(self, name, do_init=False):
         logger.info(f"Using device {name}")
 
         self.state_cb = None
@@ -63,32 +62,31 @@ class ArmController:
 
         self.config_cb = None
         self.config_cb_lock = threading.Lock()
-        
+
         self.debug_cb = None
-        
+
         self.error_cb = None
 
         self.quit = threading.Event()
-        
+
         self.t = threading.Thread(target=self.recv_thread, daemon=True)
         self.t.start()
-        
+
+        if do_init:
+            self.set_torque(128)
+            return
+
         self.set_torque(1)
         self.set_pid()
-        
-        # # set gripper mid
-        # self.write(struct.pack('>BBiiii', self.COMM_HEAD, self.COMM_TYPE_INIT_JOINT, 15, 1448, 0, 0)) # 1448 / 4096 * 2 * 3.14 * 0.027 / 2 == 0.030m == 30mm
-        # time.sleep(2)
-        # exit()
 
         while self.last_position is None: # wait for init done
             time.sleep(0.1)
-    
+
     # def set_pid(self, p=10.0, i=7.0, d=20.0, i_max=800, i_clip_thres=10.0, i_clip_coef=0.5):
     # def set_pid(self, p=8.0, i=0.5, d=0, i_max=100, i_clip_thres=100000.0, i_clip_coef=1):
     def set_pid(self, p=30, i=0, d=0, i_max=800, p2=10, p2_err_thres=2, i_clip_thres=100000.0, i_clip_coef=1):
         self.write(struct.pack('>BBffffffff', self.COMM_HEAD, self.COMM_TYPE_PIDTUNE, *[p, i, d, i_clip_thres, i_clip_coef, i_max, p2, p2_err_thres]))
-    
+
     @staticmethod
     def checksum(data: bytes):
         checksum = 0
@@ -96,7 +94,7 @@ class ArmController:
             checksum = checksum + b
         checksum = checksum % 256
         return checksum == data[-1]
-    
+
     databuf = bytearray()
 
     def recv_thread(self):
@@ -114,18 +112,18 @@ class ArmController:
                                 pass
                         elif len(self.databuf) == 1:
                             print(self.databuf)
-                            
+
                         self.databuf = bytearray()
                     else:
                         self.databuf.extend(data)
-                    
+
                     sys.stdout.buffer.write(data)
                     sys.stdout.flush()
                     continue
 
                 data += self.ser.read(self.COMM_LEN - 1)
                 assert(len(data) == self.COMM_LEN)
-                
+
                 if not self.checksum(data):
                     logger.error(f"checksum failed {data.hex()}")
                     continue
@@ -182,10 +180,10 @@ class ArmController:
                 ok = False
         if ok:
             self.write(struct.pack('>BBHHHHHHxxxx', self.COMM_HEAD, self.COMM_TYPE_CTRL, *self.to_raw_unit(pos)))
-    
+
     def set_torque(self, torque):
         self.write(struct.pack('>BBBxxxxxxxxxxxxxxx', self.COMM_HEAD, self.COMM_TYPE_TORQUE, torque))
-        
+
     def stop(self):
         if not self.quit.is_set():
             self.quit.set()
