@@ -5,7 +5,6 @@ import rclpy.action
 
 import astra_controller_interfaces.msg
 import control_msgs.action
-import astra_controller_interfaces.srv
 
 def main(args=None):
     rclpy.init(args=args)
@@ -17,15 +16,15 @@ def main(args=None):
     gripper_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, "arm/gripper_joint_command", 10)
 
     lift_joint_command_publisher = node.create_publisher(astra_controller_interfaces.msg.JointCommand, "lift/joint_command", 10)
-    
+
     joint_pos = {
-        "joint_r1": 0, 
-        "joint_r2": 0, 
-        "joint_r3": 0, 
-        "joint_r4": 0, 
-        "joint_r5": 0, 
-        "joint_r6": 0, 
-        "joint_r7l": 0, 
+        "joint_r1": 0,
+        "joint_r2": 0,
+        "joint_r3": 0,
+        "joint_r4": 0,
+        "joint_r5": 0,
+        "joint_r6": 0,
+        "joint_r7l": 0,
         "joint_r7r": 0
     }
 
@@ -36,7 +35,7 @@ def main(args=None):
         # print(goal_handle.request.trajectory.points[-1].positions) # trajectory_msgs.msg.JointTrajectoryPoint(positions=[0.1,0.2,...], velocities=...)
 
         for joint_name, position in zip(
-            goal_handle.request.trajectory.joint_names, 
+            goal_handle.request.trajectory.joint_names,
             goal_handle.request.trajectory.points[-1].positions
         ):
             joint_pos[joint_name] = position
@@ -68,7 +67,7 @@ def main(args=None):
             ]
         )
         lift_joint_command_publisher.publish(msg)
-        
+
         # ignore publish_feedback
 
         goal_handle.succeed()
@@ -91,7 +90,7 @@ def main(args=None):
         # print(goal_handle.request.trajectory.points[-1].positions) # trajectory_msgs.msg.JointTrajectoryPoint(positions=[0.1,0.2,...], velocities=...)
 
         for joint_name, position in zip(
-            goal_handle.request.trajectory.joint_names, 
+            goal_handle.request.trajectory.joint_names,
             goal_handle.request.trajectory.points[-1].positions
         ):
             joint_pos[joint_name] = position
@@ -105,7 +104,7 @@ def main(args=None):
             ]
         )
         gripper_joint_command_publisher.publish(msg)
-        
+
         # ignore publish_feedback
 
         goal_handle.succeed()

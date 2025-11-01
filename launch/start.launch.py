@@ -18,25 +18,24 @@ from srdfdom.srdf import SRDF
 
 def generate_launch_description():
     ld = LaunchDescription()
-    
+
     package_name = 'astra_controller'
     package_path = Path(get_package_share_directory(package_name))
-    
+
     ld.add_action(
         DeclareLaunchArgument(
             "rviz_config",
             default_value=str(package_path / "config/default.rviz"),
         )
     )
-    
+
     # Cameras
     ld.add_action(
         Node(
-            package='usb_cam', executable='usb_cam_node_exe',
+            package='simple_cap', executable='simple_cap_node',
             namespace='cam_head',
             parameters=[{
-                'video_device': '/dev/video_head',
-                'pixel_format': 'mjpeg2rgb', # mjpeg2rgb to imdecode with usb_cam (usb_cam use ffmpeg decode which is more faster and less cpu usage)
+                'device': '/dev/video_head',
                 'image_width': 640,
                 'image_height': 360,
                 'framerate': 30.0,
@@ -46,11 +45,10 @@ def generate_launch_description():
     )
     ld.add_action(
         Node(
-            package='usb_cam', executable='usb_cam_node_exe',
+            package='simple_cap', executable='simple_cap_node',
             namespace='left/cam_wrist',
             parameters=[{
-                'video_device': '/dev/video_wrist_left',
-                'pixel_format': 'mjpeg2rgb',
+                'device': '/dev/video_wrist_left',
                 'image_width': 640,
                 'image_height': 360,
                 'framerate': 30.0,
@@ -60,11 +58,10 @@ def generate_launch_description():
     )
     ld.add_action(
         Node(
-            package='usb_cam', executable='usb_cam_node_exe',
+            package='simple_cap', executable='simple_cap_node',
             namespace='right/cam_wrist',
             parameters=[{
-                'video_device': '/dev/video_wrist_right',
-                'pixel_format': 'mjpeg2rgb',
+                'device': '/dev/video_wrist_right',
                 'image_width': 640,
                 'image_height': 360,
                 'framerate': 30.0,
@@ -72,7 +69,7 @@ def generate_launch_description():
             output={'both': 'log'},
         )
     )
-    
+
     # Real Arms
     ld.add_action(
         Node(
@@ -90,7 +87,7 @@ def generate_launch_description():
             emulate_tty=True,
         )
     )
-    
+
     ld.add_action(
         Node(
             package=package_name,
@@ -109,7 +106,7 @@ def generate_launch_description():
             emulate_tty=True,
         )
     )
-    
+
     ld.add_action(
         Node(
             package=package_name,
@@ -126,7 +123,7 @@ def generate_launch_description():
             emulate_tty=True,
         )
     )
-    
+
     ld.add_action(
         Node(
             package=package_name,
@@ -145,7 +142,7 @@ def generate_launch_description():
             emulate_tty=True,
         )
     )
-    
+
     # # Fake Arms
     # ld.add_action(
     #     Node(
@@ -160,7 +157,7 @@ def generate_launch_description():
     #         ],
     #     )
     # )
-    
+
     # ld.add_action(
     #     Node(
     #         package=package_name,
@@ -174,7 +171,7 @@ def generate_launch_description():
     #         ],
     #     )
     # )
-    
+
     # IK
     ld.add_action(
         Node(
@@ -182,12 +179,12 @@ def generate_launch_description():
             executable="ik_node",
             namespace='left',
             parameters=[{
-                'eef_link_name': 'link_lee_teleop', 
+                'eef_link_name': 'link_lee_teleop',
                 'joint_names': ['joint_l1', 'joint_l2', 'joint_l3', 'joint_l4', 'joint_l5', 'joint_l6'],
             }],
         )
     )
-    
+
     ld.add_action(
         Node(
             package=package_name,
@@ -199,7 +196,7 @@ def generate_launch_description():
             }],
         )
     )
-    
+
     # Base
     ld.add_action(
         Node(
@@ -210,7 +207,7 @@ def generate_launch_description():
             }],
         )
     )
-    
+
     # Head
     ld.add_action(
         Node(
@@ -227,7 +224,7 @@ def generate_launch_description():
             emulate_tty=True,
         )
     )
-    
+
     # Teleop (Web)
     ld.add_action(
         Node(
@@ -237,13 +234,13 @@ def generate_launch_description():
             emulate_tty=True,
         )
     )
-    
+
     # Visualization
     ld.add_action(
         IncludeLaunchDescription(
             FrontendLaunchDescriptionSource([
                 str(Path(get_package_share_directory('astra_description'))
-                    / 'launch' / 'publish_model.launch'), 
+                    / 'launch' / 'publish_model.launch'),
             ]),
         )
     )

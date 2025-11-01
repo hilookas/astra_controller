@@ -5,7 +5,6 @@ import rclpy.action
 
 import sensor_msgs.msg
 import astra_controller_interfaces.msg
-import astra_controller_interfaces.srv
 import std_msgs.msg
 
 from .lift_controller import LiftController
@@ -16,13 +15,13 @@ def main(args=None):
     node = rclpy.node.Node('lift_node')
 
     logger = node.get_logger()
-    
+
     node.declare_parameter('device', '/dev/tty_puppet_lift_right')
     node.declare_parameter('joint_names', [ "joint_r1" ])
 
     device = node.get_parameter('device').value
     joint_names = node.get_parameter('joint_names').value
-    
+
     assert len(joint_names) == 1
 
     lift_controller = LiftController(device)
@@ -42,7 +41,7 @@ def main(args=None):
     def cb(data):
         error_publisher.publish(std_msgs.msg.String(data=data))
     lift_controller.error_cb = cb
-    
+
     def cb(msg: astra_controller_interfaces.msg.JointCommand):
         assert msg.name == joint_names
         lift_controller.set_pos(msg.position_cmd[0])
